@@ -1,6 +1,6 @@
-# DS Harness
+# DS Agent Harness
 
-**DS Harness is a thin governance layer between an AI coding agent and the data it works on (context, verification checks, delivery gates and an append-only evidence registry), plus a pre-registered evaluation loop that measures whether that layer actually reduces errors that look right.**
+**DS Agent Harness is a thin governance layer between an AI coding agent and the data it works on (context, verification checks, delivery gates and an append-only evidence registry), plus a pre-registered evaluation loop that measures whether that layer actually reduces errors that look right.**
 
 中文说明：[README.zh-CN.md](README.zh-CN.md) · Current status and results: [docs/STATUS.md](docs/STATUS.md) ([中文](docs/STATUS.zh-CN.md))
 
@@ -8,7 +8,7 @@
 
 AI agents such as Claude Code and Codex can already query a warehouse, fix a dbt pipeline or read out an A/B test. The dangerous failure is not the error that crashes. It is the *silent* error: a plausible number, effect or "fixed" pipeline that is wrong and is delivered as if it were right (a refund left in revenue, a pooled effect where two e-mails differ, a month served with 8% of its trips missing).
 
-DS Harness asks two questions:
+DS Agent Harness asks two questions:
 
 1. Can a delivery layer catch those errors with programs (reconciliation against governed metrics, leakage checks, contract and regression checks, typed claims) and hold or reject the deliverable instead of shipping it?
 2. Does it help *real* agents on *real* data, measured honestly, or does it only look good on scripted ones?
@@ -17,7 +17,7 @@ This repository is the reference implementation and the measuring instrument. It
 
 ## Architecture
 
-![DS Harness architecture](docs/architecture.svg)
+![DS Agent Harness architecture](docs/architecture.svg)
 
 Behind the harness, the agent does not touch the data directly. It works through role-scoped tools (Python `dsharness.tools`, or three MCP servers: `dsh-analyst`, `dsh-ds`, `dsh-de`). Every deliverable is checked, recorded as evidence and passed through a gate that returns ALLOW, HOLD or REJECT. Ground truth lives in a custody zone that only evaluator code can read.
 

@@ -1,8 +1,8 @@
-# DS Harness
+# DS Agent Harness
 
 > English: [README.md](README.md) · [docs/DESIGN.en-US.md](docs/DESIGN.en-US.md)
 
-**DS Harness** 是一层可验证的交付层。它让任意 AI Agent（Claude Code、Codex、Qwen Code、平台原生 agent 等）能够在企业数据上做数据科学和数据工程工作，并且每个交付物都附带证据。
+**DS Agent Harness** 是一层可验证的交付层。它让任意 AI Agent（Claude Code、Codex、Qwen Code、平台原生 agent 等）能够在企业数据上做数据科学和数据工程工作，并且每个交付物都附带证据。
 
 - 完整设计方案：[docs/DESIGN.zh-CN.md](docs/DESIGN.zh-CN.md)
 - 调研证据：[docs/REFERENCES.md](docs/REFERENCES.md)
