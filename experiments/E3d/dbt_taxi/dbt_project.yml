@@ -1,0 +1,10 @@
+name: taxi
+version: "1.0.0"
+config-version: 2
+profile: taxi
+model-paths: ["models"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+flags:
+  send_anonymous_usage_stats: false

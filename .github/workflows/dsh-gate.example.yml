@@ -1,0 +1,155 @@
+# EXAMPLE ONLY -- shows where the DS Harness gate sits in a real CI/CD flow, for the
+# `pipeline_merge` stage (a proposed change to the governed SQL pipeline). It is triggered manually
+# (workflow_dispatch) so it never runs by accident; it has not been run against a live repository.
+# Every command below exists in the `dsh` CLI (dsharness.cli):
+#   dsh world / dsh build --cutoff score   the source exports and the already-served READY build
+#   dsh pipeline-check --changed DIR       runs the stage's checks through dsharness.tools.de
+#                                          (pipeline.ci_build, pipeline.regression_diff,
+#                                          pipeline.oracle_independence) and appends the evidence to
+#                                          workspace/registry/evidence.jsonl (producer ci:pipeline);
+#                                          --subject-out writes the gated subject as canonical JSON,
+#                                          so `sha256sum subject.json` IS the subject digest
+#   dsh gate --stage S --subject-json F    the policy step: prints the GateDecision, exit 0 only on ALLOW
+#   dsh evidence export --out DIR          in-toto Statement v1 files for every evidence record, gate
+#                                          decision and answer certificate, marked UNSIGNED-LOCAL
+# `dsh bench` is NOT a gate input: it writes only private registries under runs/bench/<run_id>/ and
+# never touches workspace/registry. Run it as a harness regression test, not as stage evidence.
+#
+# Flow: checkout the governed (base) harness + the proposed pipeline -> checks (each check job = one
+#       producer identity) -> dsh gate (policy step) -> actions/attest (Sigstore-signed in-toto
+#       statement binding the decision to the subject, signed with this job's OIDC identity) ->
+#       protected environment (required reviewers, prevent self-review) -> verify attestation -> merge.
+#
+# The harness code that judges the change always comes from the base ref: the proposed ref only
+# supplies its pipeline directory, so a change cannot weaken the checks that judge it.
+#
+# Mapping to the reference implementation (policies/gates.yaml):
+#   producer "ci:pipeline" / "verifier:*"  == the OIDC identity of the job that ran the check;
+#     in production each evidence statement is signed by that job and `gh attestation verify
+#     --signer-workflow` replaces the string comparison in evidence/gate.py. Until then every
+#     exported statement is UNSIGNED-LOCAL and prod stages treat it as HOLD (evidence/attest.py).
+#   approvals (CODEOWNER, business_owner, risk) == required reviewers on the GitHub environment.
+#   "no_self_approval"                      == the environment's "prevent self-review" setting.
+# Other stages follow the same shape with their own subject: answer_publish evidence comes from
+# submit_answer (answer certificates), model_* from request_final_evaluation / the experiment readout.
+name: dsh-gate pipeline_merge (example)
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_ref:
+        description: Governed branch (harness code + current pipeline)
+        required: true
+        default: main
+      proposed_ref:
+        description: Branch or SHA with the proposed pipeline change
+        required: true
+      rationale:
+        description: Why the change is needed (recorded with the change)
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  DSH_WORKSPACE: ${{ github.workspace }}/workspace
+  PIPELINE_DIR: src/dsharness/lake/pipeline
+  PREDICATE_TYPE: https://dsharness.dev/gate-decision/v1
+
+jobs:
+  checks:
+    # In production split the checks into one job per producer so each gets its own OIDC subject;
+    # only an evaluator job may mount custody/ (pipeline_merge needs none).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.base_ref }}
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.proposed_ref }}
+          path: proposed
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - name: Harness self-tests (base ref)
+        run: uv run pytest -q -p no:cacheprovider
+      - name: Source exports and the already-served READY build (regression baseline)
+        # Example world; in production these are the warehouse's source exports for the cutoffs.
+        run: |
+          uv run dsh world
+          uv run dsh build --cutoff score
+      - name: Stage checks -> evidence in workspace/registry (producer ci:pipeline)
+        env:                   # inputs go through env, never interpolated into the script (injection)
+          RATIONALE: ${{ inputs.rationale }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          uv run dsh pipeline-check \
+            --changed "proposed/$PIPELINE_DIR" \
+            --principal "github:$ACTOR" \
+            --rationale "$RATIONALE" \
+            --subject-out subject.json
+      - name: Export the evidence as in-toto statements (UNSIGNED-LOCAL until signed)
+        run: uv run dsh evidence export --out statements
+      - uses: actions/upload-artifact@v4
+        with:
+          name: evidence
+          path: |
+            workspace/registry/
+            subject.json
+            statements/
+
+  gate:
+    needs: checks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write        # OIDC token for Sigstore signing
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.base_ref }}
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - uses: actions/download-artifact@v4
+        with:
+          name: evidence
+      - name: Policy step (fails the job unless ALLOW)
+        run: uv run dsh gate --stage pipeline_merge --subject-json subject.json | tee decision.json
+        shell: bash            # GitHub runs explicit bash with -eo pipefail
+      - name: Attest the decision (in-toto statement, Sigstore-signed with this job's OIDC identity)
+        uses: actions/attest@v2
+        with:
+          subject-path: subject.json         # sha256(subject.json) == the subject digest the evidence binds
+          predicate-type: ${{ env.PREDICATE_TYPE }}
+          predicate-path: decision.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gate-decision
+          path: |
+            subject.json
+            decision.json
+
+  merge:
+    needs: gate
+    runs-on: ubuntu-latest
+    # Protected environment: required reviewers (pipeline CODEOWNER), "prevent self-review",
+    # deployment branch rules; its secrets are released only after approval.
+    environment: dsh-pipeline_merge
+    permissions:
+      contents: read
+      attestations: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: gate-decision
+      - name: Verify the decision was attested by this repository's gate workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh attestation verify subject.json \
+            --repo "${{ github.repository }}" \
+            --predicate-type "$PREDICATE_TYPE" \
+            --signer-workflow "${{ github.repository }}/.github/workflows/dsh-gate.example.yml"
+      - name: Merge
+        run: echo "merge ${{ inputs.proposed_ref }} (subject $(jq -r .subject_digest decision.json))"

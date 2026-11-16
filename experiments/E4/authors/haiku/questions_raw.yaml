@@ -1,0 +1,337 @@
+```yaml
+- id: q01
+  lang: en
+  question: "Before any cancellations, how much product sales did we book in March 2025 in GBP, with UK and non-UK shown separately?"
+  keys: [market]
+  unit: gbp
+  months: ["2025-03", "2025-03"]
+  truth_sql: |
+    SELECT market, ROUND(SUM(amount), 2) AS value
+    FROM truth_lines
+    WHERE line_type = 'product' AND month = '2025-03'
+    GROUP BY market
+    ORDER BY market;
+  notes: "Gross product sales (product lines only, before cancellations), split by market. Two rows."
+
+- id: q02
+  lang: en
+  question: "How many orders with at least one product line came from customers based in Germany in June 2024?"
+  keys: []
+  unit: count
+  months: ["2024-06", "2024-06"]
+  truth_sql: |
+    SELECT COUNT(DISTINCT order_no) AS value
+    FROM truth_lines
+    WHERE line_type = 'product' AND country = 'Germany' AND month = '2024-06';
+  notes: "Official orders count, filtered by customer country. Guest orders with a German country are included, since they count in orders."
+
+- id: q03
+  lang: zh
+  question: "2025年10月，物料编码 85123A 一共卖出了多少件？"
+  keys: []
+  unit: count
+  months: ["2025-10", "2025-10"]
+  truth_sql: |
+    SELECT SUM(qty) AS value
+    FROM truth_lines
+    WHERE line_type = 'product' AND sku = '85123A' AND month = '2025-10';
+  notes: "Units sold for one item code: total quantity of product lines only. Cancellations and other line types are excluded. Item code 85123A starts with five digits, so it is a product code."
+
+- id: q04
+  lang: en
+  question: "In September 2025, how much product sales in GBP came from guest orders, and how much came from orders placed under a customer number? Give one row for each."
+  keys: [customer_type]
+  unit: gbp
+  months: ["2025-09", "2025-09"]
+  truth_sql: |
+    SELECT CASE WHEN buyer_id IS NULL THEN 'guest' ELSE 'identified_customer' END AS customer_type,
+           ROUND(SUM(amount), 2) AS value
+    FROM truth_lines
+    WHERE line_type = 'product' AND month = '2025-09'
+    GROUP BY customer_type
+    ORDER BY customer_type;
+  notes: "Gross product sales split by customer type. Customer type is based on whether the line has a customer number."
+
+- id: q05
+  lang: en
+  question: "For UK customers across January to March 2025 together, how many units did an average order contain? Total units divided by number of orders, as a plain number with four decimals."
+  keys: []
+  unit: other
+  months: ["2025-01", "2025-03"]
+  truth_sql: |
+    SELECT ROUND(SUM(qty)::DOUBLE / COUNT(DISTINCT order_no), 4) AS value
+    FROM truth_lines
+    WHERE line_type = 'product' AND market = 'UK' AND month BETWEEN '2025-01' AND '2025-03';
+  notes: "Units per order, recomputed from the quarter's totals (total units over distinct orders), not an average of monthly ratios. Uses product lines only."
+
+- id: q06
+  lang: en
+  question: "In August 2025, what was the cancelled value per order in GBP, rounded to two decimals? Divide the cancellations booked that month by the number of orders placed that month."
+  keys: []
+  unit: gbp
+  months: ["2025-08", "2025-08"]
+  truth_sql: |
+    WITH c AS (
+      SELECT -SUM(amount)::DOUBLE AS cancelled
+      FROM truth_lines
+      WHERE line_type = 'cancellation' AND month = '2025-08'
+    ),
+    o AS (
+      SELECT COUNT(DISTINCT order_no) AS orders
+      FROM truth_lines
+      WHERE line_type = 'product' AND month = '2025-08'
+    )
+    SELECT ROUND(c.cancelled / o.orders, 2) AS value
+    FROM c, o;
+  notes: "Cancelled value is booked in the month of the cancellation line, as a positive amount. The denominator is orders placed in the same month, counted from product lines."
+
+- id: q07
+  lang: zh
+  question: "2025年4月到6月这三个月合起来，每个有客户编号的客户平均带来多少商品销售额（英镑）？只计算带客户编号的订单，客户按整个季度去重计数。"
+  keys: []
+  unit: gbp
+  months: ["2025-04", "2025-06"]
+  truth_sql: |
+    SELECT ROUND(SUM(amount)::DOUBLE / COUNT(DISTINCT buyer_id), 2) AS value
+    FROM truth_lines
+    WHERE line_type = 'product'
+      AND buyer_id IS NOT NULL
+      AND month BETWEEN '2025-04' AND '2025-06';
+  notes: "Gross product sales from identified-customer lines only, divided by distinct customer numbers across the quarter. Guest sales are excluded from both the numerator and the denominator."
+
+- id: q08
+  lang: en
+  question: "What share of the customer numbers that bought in June 2025 had also bought in an earlier month? Give a share between 0 and 1, to four decimal places, not a percentage."
+  keys: []
+  unit: share
+  months: ["2025-06", "2025-06"]
+  truth_sql: |
+    WITH active AS (
+      SELECT DISTINCT buyer_id
+      FROM truth_lines
+      WHERE line_type = 'product' AND buyer_id IS NOT NULL AND month = '2025-06'
+    ),
+    earlier AS (
+      SELECT DISTINCT buyer_id
+      FROM truth_lines
+      WHERE line_type = 'product' AND buyer_id IS NOT NULL AND month < '2025-06'
+    )
+    SELECT ROUND(AVG(CASE WHEN e.buyer_id IS NOT NULL THEN 1.0 ELSE 0.0 END), 4) AS value
+    FROM active a
+    LEFT JOIN earlier e ON e.buyer_id = a.buyer_id;
+  notes: "Repeat customers in June 2025 divided by active customers in June 2025. Guest orders are excluded, since they are never customers."
+
+- id: q09
+  lang: en
+  question: "How much did net product sales, after cancellations, grow in Q1 2025 compared with Q1 2024? Give the percentage change to two decimals."
+  keys: []
+  unit: percent
+  months: ["2024-01", "2025-03"]
+  truth_sql: |
+    WITH n AS (
+      SELECT SUM(CASE WHEN month BETWEEN '2025-01' AND '2025-03' THEN amount END)::DOUBLE AS y25,
+             SUM(CASE WHEN month BETWEEN '2024-01' AND '2024-03' THEN amount END)::DOUBLE AS y24
+      FROM truth_lines
+      WHERE line_type IN ('product', 'cancellation')
+    )
+    SELECT ROUND((y25 - y24) / y24 * 100, 2) AS value
+    FROM n;
+  notes: "Net product sales = gross product sales minus cancelled value. Cancellation amounts are already negative, so net equals the sum of product and cancellation lines. Growth is (Q1 2025 minus Q1 2024) divided by Q1 2024, as a percent."
+
+- id: q10
+  lang: en
+  question: "For each month from January to June 2025, what was the percentage change in net product sales compared with the same month a year earlier? One row per month, percent to two decimals."
+  keys: [month]
+  unit: percent
+  months: ["2024-01", "2025-06"]
+  truth_sql: |
+    WITH m AS (
+      SELECT month, SUM(amount)::DOUBLE AS net
+      FROM truth_lines
+      WHERE line_type IN ('product', 'cancellation')
+        AND month BETWEEN '2024-01' AND '2025-06'
+      GROUP BY month
+    )
+    SELECT c.month, ROUND((c.net - p.net) / p.net * 100, 2) AS value
+    FROM m c
+    JOIN m p ON p.month = '2024-' || SUBSTR(c.month, 6, 2)
+    WHERE c.month BETWEEN '2025-01' AND '2025-06'
+    ORDER BY c.month;
+  notes: "Net product sales per month (gross minus cancelled value, both booked in the month), compared with the same calendar month in 2024."
+
+- id: q11
+  lang: en
+  question: "Year to date, how much net product sales in GBP have we accumulated by the end of each month from January to November 2025? Give a running total, one row per month."
+  keys: [month]
+  unit: gbp
+  months: ["2025-01", "2025-11"]
+  truth_sql: |
+    WITH m AS (
+      SELECT month, SUM(amount)::DOUBLE AS net
+      FROM truth_lines
+      WHERE line_type IN ('product', 'cancellation')
+        AND month BETWEEN '2025-01' AND '2025-11'
+      GROUP BY month
+    )
+    SELECT month, ROUND(SUM(net) OVER (ORDER BY month), 2) AS value
+    FROM m
+    ORDER BY month;
+  notes: "Running total of monthly net product sales starting at 2025-01. Net = gross product sales minus cancelled value, per month."
+
+- id: q12
+  lang: en
+  question: "By how many percent did average order value change from Q2 2024 to Q2 2025? Average order value is gross product sales per order, for the whole quarter. Give percent to two decimals."
+  keys: []
+  unit: percent
+  months: ["2024-04", "2025-06"]
+  truth_sql: |
+    WITH p AS (
+      SELECT CASE WHEN month BETWEEN '2025-04' AND '2025-06' THEN 'y2025'
+                  WHEN month BETWEEN '2024-04' AND '2024-06' THEN 'y2024' END AS yr,
+             SUM(amount)::DOUBLE AS gross,
+             COUNT(DISTINCT order_no)::DOUBLE AS orders
+      FROM truth_lines
+      WHERE line_type = 'product'
+      GROUP BY yr
+    )
+    SELECT ROUND(
+      ((SELECT gross / orders FROM p WHERE yr = 'y2025') - (SELECT gross / orders FROM p WHERE yr = 'y2024'))
+      / (SELECT gross / orders FROM p WHERE yr = 'y2024') * 100, 2) AS value;
+  notes: "Average order value for each quarter is recomputed from its totals (gross product sales over distinct orders). Change is measured against Q2 2024."
+
+- id: q13
+  lang: en
+  question: "Which five item codes brought in the most gross product sales in GBP from January to November 2025? Give each code with its value, highest first."
+  keys: [sku]
+  unit: gbp
+  months: ["2025-01", "2025-11"]
+  truth_sql: |
+    SELECT sku, ROUND(SUM(amount), 2) AS value
+    FROM truth_lines
+    WHERE line_type = 'product' AND month BETWEEN '2025-01' AND '2025-11'
+    GROUP BY sku
+    ORDER BY value DESC
+    LIMIT 5;
+  notes: "Ranked by gross product sales before cancellations. Items are identified by item code. Cancellations are not netted off here."
+
+- id: q14
+  lang: zh
+  question: "2024年全年，按客户所在国家统计，扣除取消金额后的净产品销售额最高的前五个国家是哪些？请列出每个国家的金额（英镑），从高到低排列。"
+  keys: [country]
+  unit: gbp
+  months: ["2024-01", "2024-12"]
+  truth_sql: |
+    SELECT country, ROUND(SUM(amount), 2) AS value
+    FROM truth_lines
+    WHERE line_type IN ('product', 'cancellation')
+      AND month BETWEEN '2024-01' AND '2024-12'
+    GROUP BY country
+    ORDER BY value DESC
+    LIMIT 5;
+  notes: "Net product sales by customer country: product lines plus cancellation lines (which are negative). Cancellations are attributed to the country on the cancellation line."
+
+- id: q15
+  lang: en
+  question: "Which three months from January 2024 to November 2025 had the highest cancellation rate? Give each month with its rate as a share between 0 and 1, not a percentage."
+  keys: [month]
+  unit: share
+  months: ["2024-01", "2025-11"]
+  truth_sql: |
+    WITH g AS (
+      SELECT month,
+             -SUM(CASE WHEN line_type = 'cancellation' THEN amount ELSE 0 END)::DOUBLE AS canc,
+             SUM(CASE WHEN line_type = 'product' THEN amount ELSE 0 END)::DOUBLE AS gross
+      FROM truth_lines
+      WHERE month BETWEEN '2024-01' AND '2025-11'
+      GROUP BY month
+    )
+    SELECT month, ROUND(canc / gross, 4) AS value
+    FROM g
+    ORDER BY value DESC
+    LIMIT 3;
+  notes: "Cancellation rate per month = cancelled value booked that month divided by gross product sales that month. Rounded to four decimals; a tie at the cut-off would drop this ranking."
+
+- id: q16
+  lang: en
+  question: "What share of gross product sales from January to November 2025 came from UK customers? Give a share between 0 and 1, to four decimal places, not a percentage."
+  keys: []
+  unit: share
+  months: ["2025-01", "2025-11"]
+  truth_sql: |
+    SELECT ROUND(
+      SUM(CASE WHEN market = 'UK' THEN amount END)::DOUBLE / SUM(amount)::DOUBLE, 4) AS value
+    FROM truth_lines
+    WHERE line_type = 'product' AND month BETWEEN '2025-01' AND '2025-11';
+  notes: "UK gross product sales divided by total gross product sales over the period, before cancellations."
+
+- id: q17
+  lang: en
+  question: "What share of gross product sales in the second half of 2024 came from guest orders, meaning orders with no customer number? Give a share between 0 and 1, to four decimal places."
+  keys: []
+  unit: share
+  months: ["2024-07", "2024-12"]
+  truth_sql: |
+    SELECT ROUND(
+      SUM(CASE WHEN buyer_id IS NULL THEN amount END)::DOUBLE / SUM(amount)::DOUBLE, 4) AS value
+    FROM truth_lines
+    WHERE line_type = 'product' AND month BETWEEN '2024-07' AND '2024-12';
+  notes: "Guest gross product sales divided by total gross product sales for July to December 2024. Guest is defined as a line with no customer number."
+
+- id: q18
+  lang: en
+  question: "How many new customers did we win in each month of 2025 from January to November? A new customer is one whose first product purchase in our data falls in that month. One row per month."
+  keys: [month]
+  unit: count
+  months: ["2025-01", "2025-11"]
+  truth_sql: |
+    WITH first_m AS (
+      SELECT buyer_id, MIN(month) AS fm
+      FROM truth_lines
+      WHERE line_type = 'product' AND buyer_id IS NOT NULL
+      GROUP BY buyer_id
+    )
+    SELECT t.month, COUNT(DISTINCT t.buyer_id) AS value
+    FROM truth_lines t
+    JOIN first_m f ON f.buyer_id = t.buyer_id AND f.fm = t.month
+    WHERE t.line_type = 'product'
+      AND t.buyer_id IS NOT NULL
+      AND t.month BETWEEN '2025-01' AND '2025-11'
+    GROUP BY t.month
+    ORDER BY t.month;
+  notes: "New customers: active identified customers whose first product line in the whole data is in that month. Guests are never counted as customers."
+
+- id: q19
+  lang: zh
+  question: "2025年11月有多少老客户，也就是在11月下了单、并且在之前任何一个月也买过东西的客户编号？"
+  keys: []
+  unit: count
+  months: ["2025-11", "2025-11"]
+  truth_sql: |
+    SELECT COUNT(DISTINCT buyer_id) AS value
+    FROM truth_lines
+    WHERE line_type = 'product'
+      AND buyer_id IS NOT NULL
+      AND month = '2025-11'
+      AND buyer_id IN (
+        SELECT buyer_id
+        FROM truth_lines
+        WHERE line_type = 'product' AND buyer_id IS NOT NULL AND month < '2025-11'
+      );
+  notes: "Repeat customers in November 2025: active customers who also had a product line in any earlier month in the data. Counted once per customer number."
+
+- id: q20
+  lang: en
+  question: "What was the cancellation rate for UK and for non-UK customers separately in Q3 2025 (July to September)? Cancelled value as a share of gross product sales, between 0 and 1, to four decimal places."
+  keys: [market]
+  unit: share
+  months: ["2025-07", "2025-09"]
+  truth_sql: |
+    SELECT market,
+           ROUND(-SUM(CASE WHEN line_type = 'cancellation' THEN amount ELSE 0 END)::DOUBLE
+                 / SUM(CASE WHEN line_type = 'product' THEN amount ELSE 0 END)::DOUBLE, 4) AS value
+    FROM truth_lines
+    WHERE month BETWEEN '2025-07' AND '2025-09'
+    GROUP BY market
+    ORDER BY market;
+  notes: "Cancellation rate recomputed from the quarter's totals per market: cancelled value over gross product sales, not an average of monthly rates."
+```

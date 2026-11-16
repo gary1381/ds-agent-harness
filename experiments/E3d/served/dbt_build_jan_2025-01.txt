@@ -1,0 +1,4 @@
+$ python pipeline/ci/build.py 2025-01
+raw export check: FAIL
+  expect_table_columns_to_match_set failed: {'details': {'mismatched': {'unexpected': ['cbd_congestion_fee']}}}
+2025-01: FAILED

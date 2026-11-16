@@ -1,0 +1,4 @@
+$ python pipeline/build.py 2026-09
+contract: FAIL
+  unexpected column request_source (VARCHAR)
+2026-09: FAILED

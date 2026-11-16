@@ -1,0 +1,18 @@
+models:
+  order_lines:
+    columns:
+      order_no: [not_null]
+      line_type: [{accepted_values: [product, cancellation, fee, adjustment, voucher, other_nonproduct, zero_or_negative]}]
+    expressions:
+      cancellation_lines_are_negative: "line_type <> 'cancellation' OR qty < 0"
+      product_lines_positive: "line_type <> 'product' OR (qty > 0 AND unit_price > 0)"
+reconciliations:
+  # Conservation: classification may relabel lines but must not create or lose money.
+  classification_conserves_amount: |
+    WITH a AS (SELECT SUM(CAST(qty AS DECIMAL(18, 0)) * CAST(unit_price AS DECIMAL(18, 4))) AS v
+               FROM (SELECT DISTINCT * FROM staging.stg_order_lines)),
+         b AS (SELECT SUM(amount) AS v FROM silver.order_lines)
+    SELECT a.v, b.v FROM a, b WHERE a.v IS DISTINCT FROM b.v
+  # The semantic model sums monthly order counts over a period; that holds only if no order spans two months.
+  orders_stay_in_one_month: |
+    SELECT order_no FROM silver.order_lines GROUP BY order_no HAVING count(DISTINCT month) > 1

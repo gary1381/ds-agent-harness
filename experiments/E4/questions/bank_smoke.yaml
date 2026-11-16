@@ -1,0 +1,48 @@
+- qid: SMOKE-F-H13
+  set: F
+  author: haiku
+  lang: en
+  question: Which five item codes brought in the most gross product sales in GBP from
+    January to November 2025? Give each code with its value, highest first.
+  keys:
+  - sku
+  unit: gbp
+  months:
+  - 2025-01
+  - 2025-11
+  truth_sql: 'SELECT sku, (SUM(amount)) AS value
+
+    FROM truth_lines
+
+    WHERE line_type = ''product'' AND month BETWEEN ''2025-01'' AND ''2025-11''
+
+    GROUP BY sku
+
+    ORDER BY value DESC
+
+    LIMIT 5;
+
+    '
+  notes: Ranked by gross product sales before cancellations. Items are identified
+    by item code. Cancellations are not netted off here.
+- qid: SMOKE-F-H16
+  set: F
+  author: haiku
+  lang: en
+  question: What share of gross product sales from January to November 2025 came from
+    UK customers? Give a share between 0 and 1, to four decimal places, not a percentage.
+  keys: []
+  unit: share
+  months:
+  - 2025-01
+  - 2025-11
+  truth_sql: 'SELECT (SUM(CASE WHEN market = ''UK'' THEN amount END)::DOUBLE / SUM(amount)::DOUBLE)
+    AS value
+
+    FROM truth_lines
+
+    WHERE line_type = ''product'' AND month BETWEEN ''2025-01'' AND ''2025-11'';
+
+    '
+  notes: UK gross product sales divided by total gross product sales over the period,
+    before cancellations.

@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dsharness.dev/schemas/answer-certificate/v1",
+  "title": "DS Harness answer certificate (v1)",
+  "description": "Issued by dsharness.tools.submit_answer for every submitted answer, and by dsharness.tools.cross_check_answers when a host compares the answer with a second, different model's answer to the same question (trust label T2); appended to registry/answer_certificates.jsonl. It restates what was asked, how the question's terms were resolved to governed definitions, what was checked (with evidence ids) and how far the answer can be trusted. It is a summary of evidence, not evidence: the gate reads registry/evidence.jsonl. Digests are sha256 over canonical JSON (dsharness.common.digest). certificate_id covers every field except certificate_id itself and the caller-filled harness/model/cost blocks.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["certificate_id", "schema", "issued_at", "ai_generated", "producer", "requested_by", "task_id",
+               "question", "claims", "answer", "term_resolution", "metric_call", "metric", "semantic_digest",
+               "sql", "build", "checks", "tier", "trust_label", "allowed_use", "gate", "reasons", "caveats",
+               "harness", "model", "cost"],
+  "properties": {
+    "certificate_id": {"type": "string", "pattern": "^ac-[0-9a-f]{24}$"},
+    "schema": {"const": "https://dsharness.dev/schemas/answer-certificate/v1"},
+    "issued_at": {"type": "string", "format": "date-time"},
+    "ai_generated": {"const": true, "description": "Explicit AI-generated-content label (e.g. CAC labelling rules for AI-generated content, effective 2025-09-01)."},
+    "producer": {"enum": ["dsharness.tools.submit_answer", "dsharness.tools.cross_check_answers"]},
+    "requested_by": {"type": "string", "minLength": 1, "description": "Principal of the agent session that submitted the answer."},
+    "task_id": {"type": ["string", "null"]},
+    "question": {"type": "string", "minLength": 1},
+    "claims": {"type": "array", "items": {"type": "string"}},
+    "answer": {
+      "type": "object", "additionalProperties": false,
+      "required": ["n_rows", "columns", "rows_digest"],
+      "properties": {
+        "n_rows": {"type": "integer", "minimum": 0},
+        "columns": {"type": "array", "items": {"type": "string"}},
+        "rows_digest": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "term_resolution": {
+      "type": "object", "additionalProperties": false,
+      "required": ["mentioned_metrics", "metric_call_source", "question_months", "notes"],
+      "properties": {
+        "mentioned_metrics": {"type": "array", "items": {"type": "string"}, "description": "Governed metrics the question and claims name."},
+        "metric_call_source": {"enum": ["declared", "inferred", null], "description": "declared by the agent (can verify), inferred from the question (can only flag) or none (exploratory)."},
+        "question_months": {"oneOf": [{"type": "null"}, {"type": "array", "items": {"$ref": "#/$defs/month"}, "minItems": 2, "maxItems": 2}]},
+        "notes": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "metric_call": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/metric_call"}]},
+    "metric": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["name", "type", "owner", "definition_digest", "independent_record"],
+          "properties": {
+            "name": {"type": "string"},
+            "type": {"enum": ["simple", "ratio"]},
+            "owner": {"type": "string"},
+            "definition_digest": {"$ref": "#/$defs/sha256"},
+            "independent_record": {"type": ["string", "null"], "description": "Table holding an independent record of this metric (O1), if any."}
+          }
+        }
+      ]
+    },
+    "semantic_digest": {"$ref": "#/$defs/sha256"},
+    "sql": {
+      "type": "object", "additionalProperties": false,
+      "required": ["submitted_digest", "compiled_metric_digest"],
+      "properties": {
+        "submitted_digest": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]},
+        "compiled_metric_digest": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]}
+      }
+    },
+    "build": {
+      "type": "object", "additionalProperties": false,
+      "required": ["build_id", "cutoff", "status", "pipeline_digest", "source_digest"],
+      "properties": {
+        "build_id": {"type": "string", "minLength": 1},
+        "cutoff": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+        "status": {"const": "READY"},
+        "pipeline_digest": {"$ref": "#/$defs/sha256"},
+        "source_digest": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "checks": {
+      "type": "array", "minItems": 4,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["check_id", "outcome", "evidence_id", "producer"],
+        "properties": {
+          "check_id": {"enum": ["answer.sql_static", "answer.reexecution", "answer.reconcile", "answer.finance_close",
+                                "answer.cross_check"]},
+          "outcome": {"enum": ["PASS", "FAIL", "INCONCLUSIVE", "ERROR", "NOT_APPLICABLE", "NOT_RUN"]},
+          "evidence_id": {"type": "string", "pattern": "^ev-[0-9a-f]{24}$"},
+          "producer": {"type": "string"},
+          "months_checked": {"type": "array", "items": {"$ref": "#/$defs/month"}}
+        }
+      }
+    },
+    "tier": {"enum": ["VERIFIED", "CONSISTENT", "FLAGGED"]},
+    "trust_label": {"enum": ["T0", "T1", "T2", "T3", null], "description": "T0 reconciled to an independent record for closed months; T1 governed but provisional; T2 cross-checked by a second, different model (issued only by cross_check_answers); T3 exploratory; null when FLAGGED."},
+    "allowed_use": {"type": "string", "minLength": 1},
+    "gate": {
+      "type": "object", "additionalProperties": false,
+      "required": ["stage", "verdict", "subject_digest", "policy_digest"],
+      "properties": {
+        "stage": {"enum": ["answer_publish", "answer_internal"]},
+        "verdict": {"enum": ["ALLOW", "HOLD", "REJECT"]},
+        "subject_digest": {"$ref": "#/$defs/sha256"},
+        "policy_digest": {"type": "string"}
+      }
+    },
+    "reasons": {"type": "array", "items": {"type": "string"}},
+    "caveats": {"type": "array", "items": {"type": "string"}},
+    "second_opinion": {
+      "type": "object", "additionalProperties": false,
+      "required": ["certificate_id", "second_requested_by", "first_model", "first_provider", "second_model",
+                   "second_provider", "outcome", "evidence_id", "requested_by"],
+      "description": "Only on certificates issued by cross_check_answers: the second answer and its principal, the two models and providers (the host's claim), the comparison (evidence answer.cross_check) and the host principal that asked for it.",
+      "properties": {
+        "certificate_id": {"type": "string", "pattern": "^ac-[0-9a-f]{24}$"},
+        "second_requested_by": {"type": "string", "minLength": 1},
+        "first_model": {"type": ["string", "null"]},
+        "first_provider": {"type": ["string", "null"]},
+        "second_model": {"type": ["string", "null"]},
+        "second_provider": {"type": ["string", "null"]},
+        "outcome": {"enum": ["PASS", "FAIL", "INCONCLUSIVE"]},
+        "evidence_id": {"type": "string", "pattern": "^ev-[0-9a-f]{24}$"},
+        "requested_by": {"type": "string", "minLength": 1}
+      }
+    },
+    "harness": {
+      "type": "object", "additionalProperties": false, "required": ["name", "version"],
+      "description": "Filled in by the caller (agent harness, e.g. Claude Code); null when unknown.",
+      "properties": {"name": {"type": ["string", "null"]}, "version": {"type": ["string", "null"]}}
+    },
+    "model": {
+      "type": "object", "additionalProperties": false, "required": ["provider", "name"],
+      "description": "Filled in by the caller (the model that produced the answer); null when unknown.",
+      "properties": {"provider": {"type": ["string", "null"]}, "name": {"type": ["string", "null"]}}
+    },
+    "cost": {
+      "type": "object", "additionalProperties": false,
+      "required": ["llm_usd", "input_tokens", "output_tokens", "warehouse_bytes_scanned"],
+      "description": "Placeholder filled in by the caller (CPVC accounting); null when unknown.",
+      "properties": {
+        "llm_usd": {"type": ["number", "null"], "minimum": 0},
+        "input_tokens": {"type": ["integer", "null"], "minimum": 0},
+        "output_tokens": {"type": ["integer", "null"], "minimum": 0},
+        "warehouse_bytes_scanned": {"type": ["integer", "null"], "minimum": 0}
+      }
+    }
+  },
+  "allOf": [
+    {"if": {"properties": {"tier": {"const": "FLAGGED"}}}, "then": {"properties": {"trust_label": {"const": null}}}},
+    {"if": {"properties": {"tier": {"const": "CONSISTENT"}}}, "then": {"properties": {"trust_label": {"enum": ["T2", "T3"]}}}},
+    {"if": {"properties": {"trust_label": {"const": "T2"}}, "required": ["trust_label"]},
+     "then": {"required": ["second_opinion"],
+              "properties": {"producer": {"const": "dsharness.tools.cross_check_answers"},
+                             "second_opinion": {"properties": {"outcome": {"const": "PASS"}}},
+                             "checks": {"contains": {"required": ["check_id", "outcome"],
+                                                     "properties": {"check_id": {"const": "answer.cross_check"},
+                                                                    "outcome": {"const": "PASS"}}}},
+                             "gate": {"properties": {"stage": {"const": "answer_internal"}, "verdict": {"const": "ALLOW"}}}}}},
+    {"if": {"properties": {"producer": {"const": "dsharness.tools.cross_check_answers"}}, "required": ["producer"]},
+     "then": {"required": ["second_opinion"], "properties": {"gate": {"properties": {"stage": {"const": "answer_internal"}}}}},
+     "else": {"not": {"required": ["second_opinion"]},
+              "properties": {"gate": {"properties": {"stage": {"const": "answer_publish"}}}}}},
+    {"if": {"properties": {"tier": {"const": "VERIFIED"}}},
+     "then": {"properties": {"trust_label": {"enum": ["T0", "T1"]}, "metric_call": {"$ref": "#/$defs/metric_call"},
+                             "term_resolution": {"properties": {"metric_call_source": {"const": "declared"}}}}}}
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "month": {"type": "string", "pattern": "^\\d{4}-(0[1-9]|1[0-2])$"},
+    "metric_call": {
+      "type": "object", "additionalProperties": false,
+      "required": ["metric", "dimensions", "months", "filters"],
+      "properties": {
+        "metric": {"type": "string"},
+        "dimensions": {"type": "array", "items": {"type": "string"}},
+        "months": {"oneOf": [{"type": "null"}, {"type": "array", "items": {"$ref": "#/$defs/month"}, "minItems": 2, "maxItems": 2}]},
+        "filters": {"oneOf": [{"type": "null"}, {"type": "object", "additionalProperties": {"oneOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]}}]}
+      }
+    }
+  }
+}

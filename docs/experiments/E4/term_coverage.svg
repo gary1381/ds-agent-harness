@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 276" font-family="system-ui, sans-serif" font-size="13"><rect width="760" height="276" fill="#fcfcfb"/>
+<text x="16" y="28" font-size="16" font-weight="600" fill="#1f1f1d">Which metric does a fresh question name? 160 paraphrases by a model that never saw the terms</text>
+<text x="16" y="48" fill="#5c5b57">Set 3 (no overlap with the two sets used to edit the terms); English and Chinese, 8 each per metric, 10 metrics</text>
+<rect x="16" y="62" width="12" height="12" rx="2" fill="#2a78d6"/><text x="34" y="72" fill="#3b3a37">resolves to its own metric</text>
+<rect x="240" y="62" width="12" height="12" rx="2" fill="#eb6834"/><text x="258" y="72" fill="#3b3a37">another metric: false-hold risk</text>
+<rect x="499" y="62" width="12" height="12" rx="2" fill="#c9c8c2"/><text x="517" y="72" fill="#3b3a37">no metric: not checked</text>
+<text x="220" y="111.0" text-anchor="end" fill="#1f1f1d">Frozen E3a terms</text>
+<rect x="230.0" y="92" width="227.7" height="30" rx="3" fill="#2a78d6"><title>Frozen E3a terms: 75 of 160</title></rect>
+<text x="343.8" y="111.0" text-anchor="middle" fill="#ffffff">75</text>
+<rect x="459.7" y="92" width="71.5" height="30" rx="3" fill="#eb6834"><title>Frozen E3a terms: 24 of 160</title></rect>
+<text x="495.4" y="111.0" text-anchor="middle" fill="#ffffff">24</text>
+<rect x="533.2" y="92" width="184.8" height="30" rx="3" fill="#c9c8c2"><title>Frozen E3a terms: 61 of 160</title></rect>
+<text x="625.6" y="111.0" text-anchor="middle" fill="#3b3a37">61</text>
+<text x="220" y="159.0" text-anchor="end" fill="#1f1f1d">E4 terms (two tuning rounds)</text>
+<rect x="230.0" y="140" width="337.9" height="30" rx="3" fill="#2a78d6"><title>E4 terms (two tuning rounds): 111 of 160</title></rect>
+<text x="399.0" y="159.0" text-anchor="middle" fill="#ffffff">111</text>
+<rect x="569.9" y="140" width="31.7" height="30" rx="3" fill="#eb6834"><title>E4 terms (two tuning rounds): 11 of 160</title></rect>
+<text x="585.8" y="159.0" text-anchor="middle" fill="#ffffff">11</text>
+<rect x="603.6" y="140" width="114.4" height="30" rx="3" fill="#c9c8c2"><title>E4 terms (two tuning rounds): 38 of 160</title></rect>
+<text x="660.8" y="159.0" text-anchor="middle" fill="#3b3a37">38</text>
+<text x="220" y="207.0" text-anchor="end" fill="#1f1f1d">E4 terms, then classifier</text>
+<rect x="230.0" y="188" width="371.6" height="30" rx="3" fill="#2a78d6"><title>E4 terms, then classifier: 122 of 160</title></rect>
+<text x="415.8" y="207.0" text-anchor="middle" fill="#ffffff">122</text>
+<rect x="603.6" y="188" width="34.8" height="30" rx="3" fill="#eb6834"><title>E4 terms, then classifier: 12 of 160</title></rect>
+<text x="621.0" y="207.0" text-anchor="middle" fill="#ffffff">12</text>
+<rect x="640.4" y="188" width="77.6" height="30" rx="3" fill="#c9c8c2"><title>E4 terms, then classifier: 26 of 160</title></rect>
+<text x="679.2" y="207.0" text-anchor="middle" fill="#3b3a37">26</text>
+</svg>

@@ -1,0 +1,9 @@
+$ python pipeline/ci/build.py 2023-02
+raw export check: FAIL
+  column VendorID is INTEGER, contract says BIGINT
+  column passenger_count is BIGINT, contract says DOUBLE
+  column RatecodeID is BIGINT, contract says DOUBLE
+  column PULocationID is INTEGER, contract says BIGINT
+  column DOLocationID is INTEGER, contract says BIGINT
+  expect_table_columns_to_match_set failed: {'details': {'mismatched': {'unexpected': ['Airport_fee'], 'missing': ['airport_fee']}}}
+2023-02: FAILED

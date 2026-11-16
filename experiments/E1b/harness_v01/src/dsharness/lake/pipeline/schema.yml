@@ -1,0 +1,118 @@
+# dbt-style data tests. A test passes when its query returns zero rows.
+models:
+  customers:
+    columns:
+      customer_id: [unique, not_null]
+      region: [{accepted_values: [north, south, east, west]}]
+  subscriptions:
+    columns:
+      subscription_id: [unique, not_null]
+      customer_id: [not_null, {relationships: {to: customers, field: customer_id}}]
+  invoices:
+    columns:
+      invoice_id: [unique, not_null]
+      invoice_type: [{accepted_values: [charge, addon, refund]}]
+      customer_id: [not_null, {relationships: {to: customers, field: customer_id}}]
+      amount_fen: [not_null]
+      unit_corrected: [not_null]
+    expressions:
+      refund_is_negative: "invoice_type <> 'refund' OR amount_fen < 0"
+      charge_is_positive: "invoice_type = 'refund' OR amount_fen > 0"
+      # Price-book validity: a charge equals the list price of the plan of the subscription in force
+      # when it was issued, valid on that day (plus: 5900 until 2026-07-31, 6900 from 2026-08-01).
+      charge_amount_on_price_book: >-
+        invoice_type <> 'charge' OR amount_fen IN (
+          SELECT p.price_fen
+          FROM silver.subscriptions s
+          JOIN silver.ref_plan_prices p
+            ON p.plan = s.plan AND CAST(invoices.issued_at AS DATE) BETWEEN p.valid_from AND p.valid_to
+          WHERE s.customer_id = invoices.customer_id
+            AND s.started_at <= invoices.issued_at
+            AND (s.ended_at IS NULL OR s.ended_at > invoices.issued_at))
+      # Incident scoping (models/ref_known_incidents.sql): corrections are registered, never inferred.
+      # (b) a charge below the cheapest plan outside every registered scope is a NEW incident: the
+      #     build fails loudly; it is registered by a human-approved change, never auto-corrected.
+      no_unregistered_unit_incident: >-
+        invoice_type <> 'charge'
+        OR EXISTS (SELECT 1 FROM silver.ref_known_incidents k WHERE k.region = invoices.region
+                   AND k.month = invoices.revenue_month AND k.invoice_type = invoices.invoice_type)
+        OR COALESCE(amount_fen >= (SELECT MIN(p.price_fen) FROM silver.ref_plan_prices p
+                                   WHERE CAST(invoices.issued_at AS DATE) BETWEEN p.valid_from AND p.valid_to),
+                    FALSE)
+      # (a) every row inside a registered scope was really affected (exported below the cheapest
+      #     plan); otherwise the registration is wrong (too wide, wrong region or month).
+      registered_incident_rows_were_affected: >-
+        NOT EXISTS (SELECT 1 FROM silver.ref_known_incidents k WHERE k.region = invoices.region
+                    AND k.month = invoices.revenue_month AND k.invoice_type = invoices.invoice_type)
+        OR COALESCE((SELECT MAX(x.amount_fen_raw) FROM staging.stg_invoices x WHERE x.invoice_id = invoices.invoice_id)
+                    < (SELECT MIN(p.price_fen) FROM silver.ref_plan_prices p
+                       WHERE CAST(invoices.issued_at AS DATE) BETWEEN p.valid_from AND p.valid_to),
+                    FALSE)
+      # The flag tells the truth, and no amount differs from the export except by a registered factor.
+      unit_corrected_iff_registered_scope: >-
+        unit_corrected = EXISTS (SELECT 1 FROM silver.ref_known_incidents k WHERE k.region = invoices.region
+                                 AND k.month = invoices.revenue_month AND k.invoice_type = invoices.invoice_type)
+      amount_equals_export_outside_registered_incidents: >-
+        NOT EXISTS (SELECT 1 FROM staging.stg_invoices x WHERE x.invoice_id = invoices.invoice_id)
+        OR amount_fen / COALESCE((SELECT k.factor FROM silver.ref_known_incidents k WHERE k.region = invoices.region
+                                  AND k.month = invoices.revenue_month AND k.invoice_type = invoices.invoice_type), 1)
+           IN (SELECT x.amount_fen_raw FROM staging.stg_invoices x WHERE x.invoice_id = invoices.invoice_id)
+  ref_known_incidents:
+    columns:
+      incident_id: [unique, not_null]
+      region: [not_null, {accepted_values: [north, south, east, west]}]
+      month: [not_null]
+      invoice_type: [not_null, {accepted_values: [charge]}]
+      factor: [not_null]
+      reason: [not_null]
+      approved_by: [not_null]
+    expressions:
+      month_is_a_calendar_month: "regexp_full_match(month, '[0-9]{4}-(0[1-9]|1[0-2])')"
+      factor_is_a_unit_factor: "factor IN (10, 100, 1000, 10000)"
+      one_incident_per_scope: >-
+        (SELECT COUNT(*) FROM silver.ref_known_incidents k WHERE k.region = ref_known_incidents.region
+         AND k.month = ref_known_incidents.month AND k.invoice_type = ref_known_incidents.invoice_type) = 1
+  ref_plan_prices:
+    columns:
+      plan: [not_null, {accepted_values: [basic, plus, pro]}]
+      price_fen: [not_null]
+      valid_from: [not_null]
+      valid_to: [not_null]
+    expressions:
+      price_is_positive: "price_fen > 0"
+      validity_is_ordered: "valid_from <= valid_to"
+      no_overlapping_validity: >-
+        NOT EXISTS (SELECT 1 FROM silver.ref_plan_prices q WHERE q.plan = ref_plan_prices.plan
+                    AND q.valid_from <> ref_plan_prices.valid_from
+                    AND q.valid_from <= ref_plan_prices.valid_to AND q.valid_to >= ref_plan_prices.valid_from)
+  usage_monthly:
+    columns:
+      customer_id: [not_null, {relationships: {to: customers, field: customer_id}}]
+  tickets:
+    columns:
+      ticket_id: [unique, not_null]
+  retention_contacts:
+    columns:
+      contact_id: [unique, not_null]
+      arm: [{accepted_values: [treatment, control]}]
+      customer_id: [not_null, {relationships: {to: customers, field: customer_id}}]
+    expressions:
+      control_never_exposed: "arm = 'treatment' OR NOT exposed"
+      # the ITT outcome (churn in the campaign month) is defined only for customers active at its start
+      enrolled_customer_active_at_campaign_start: >-
+        EXISTS (SELECT 1 FROM silver.subscriptions s WHERE s.customer_id = retention_contacts.customer_id
+                AND s.started_at < CAST(retention_contacts.campaign_month || '-01' AS TIMESTAMP)
+                AND (s.ended_at IS NULL OR s.ended_at >= CAST(retention_contacts.campaign_month || '-01' AS TIMESTAMP)))
+
+# Reconciliations against independent records. Each query returns the mismatching rows.
+reconciliations:
+  revenue_matches_finance_close: |
+    WITH ours AS (
+      SELECT revenue_month AS month, region, SUM(amount_fen) AS net_revenue_fen
+      FROM silver.invoices WHERE NOT is_test_account
+      GROUP BY 1, 2
+    )
+    SELECT f.month, f.region, f.net_revenue_fen AS finance, o.net_revenue_fen AS pipeline
+    FROM silver.finance_closed_revenue f
+    LEFT JOIN ours o USING (month, region)
+    WHERE o.net_revenue_fen IS DISTINCT FROM f.net_revenue_fen

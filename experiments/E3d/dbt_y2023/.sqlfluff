@@ -1,0 +1,20 @@
+[sqlfluff]
+dialect = duckdb
+templater = jinja
+max_line_length = 120
+# `month` is a served column name (and a DuckDB keyword)
+exclude_rules = RF04
+
+[sqlfluff:templater:jinja]
+apply_dbt_builtins = True
+load_macros_from_path = macros
+
+[sqlfluff:templater:jinja:context]
+month = 2023-08
+
+[sqlfluff:indentation]
+indent_unit = space
+tab_space_size = 4
+
+[sqlfluff:rules:capitalisation.keywords]
+capitalisation_policy = lower

@@ -1,0 +1,99 @@
+{
+ "columns": [
+  {
+   "name": "VendorID",
+   "type": "INTEGER",
+   "required": true
+  },
+  {
+   "name": "tpep_pickup_datetime",
+   "type": "TIMESTAMP",
+   "required": true
+  },
+  {
+   "name": "tpep_dropoff_datetime",
+   "type": "TIMESTAMP",
+   "required": true
+  },
+  {
+   "name": "passenger_count",
+   "type": "BIGINT",
+   "required": true
+  },
+  {
+   "name": "trip_distance",
+   "type": "DOUBLE",
+   "required": true
+  },
+  {
+   "name": "RatecodeID",
+   "type": "BIGINT",
+   "required": true
+  },
+  {
+   "name": "store_and_fwd_flag",
+   "type": "VARCHAR",
+   "required": true
+  },
+  {
+   "name": "PULocationID",
+   "type": "INTEGER",
+   "required": true
+  },
+  {
+   "name": "DOLocationID",
+   "type": "INTEGER",
+   "required": true
+  },
+  {
+   "name": "payment_type",
+   "type": "BIGINT",
+   "required": true
+  },
+  {
+   "name": "fare_amount",
+   "type": "DOUBLE",
+   "required": true
+  },
+  {
+   "name": "extra",
+   "type": "DOUBLE",
+   "required": true
+  },
+  {
+   "name": "mta_tax",
+   "type": "DOUBLE",
+   "required": true
+  },
+  {
+   "name": "tip_amount",
+   "type": "DOUBLE",
+   "required": true
+  },
+  {
+   "name": "tolls_amount",
+   "type": "DOUBLE",
+   "required": true
+  },
+  {
+   "name": "improvement_surcharge",
+   "type": "DOUBLE",
+   "required": true
+  },
+  {
+   "name": "total_amount",
+   "type": "DOUBLE",
+   "required": true
+  },
+  {
+   "name": "congestion_surcharge",
+   "type": "DOUBLE",
+   "required": true
+  },
+  {
+   "name": "Airport_fee",
+   "type": "DOUBLE",
+   "required": true
+  }
+ ]
+}

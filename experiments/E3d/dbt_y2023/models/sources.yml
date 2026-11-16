@@ -1,0 +1,9 @@
+version: 2
+
+sources:
+  - name: tlc
+    description: The NYC TLC yellow-taxi export for one month, as published. ci/check_raw.py validates its columns first.
+    meta:
+      external_location: "read_parquet('{{ var('raw_dir', 'raw') }}/yellow_tripdata_{{ var('month') }}.parquet')"
+    tables:
+      - name: yellow_trips

@@ -1,0 +1,2 @@
+month,trips,fare_amount,extra,mta_tax,tip_amount,tolls_amount,improvement_surcharge,congestion_surcharge,airport_fee,total_amount
+2020-08,1007270,13414673.87,945642.12,496144.12,1846801.8,303880.5,298994.7,2037917.5,0.0,18705264.11

@@ -1,0 +1,806 @@
+{
+ "attempts": 144,
+ "outcomes": {
+  "claude/jan-H-r1": "sound-delivery",
+  "claude/jan-H-r2": "sound-delivery",
+  "claude/jan-H-r3": "sound-delivery",
+  "claude/jan-N-r1": "sound-delivery",
+  "claude/jan-N-r2": "sound-delivery",
+  "claude/jan-N-r3": "sound-delivery",
+  "claude/janx-H-r1": "sound-delivery",
+  "claude/janx-H-r2": "sound-delivery",
+  "claude/janx-H-r3": "sound-delivery",
+  "claude/janx-N-r1": "false-hold",
+  "claude/janx-N-r2": "sound-delivery",
+  "claude/janx-N-r3": "sound-delivery",
+  "claude/sep-H-r1": "sound-hold",
+  "claude/sep-H-r2": "sound-hold",
+  "claude/sep-H-r3": "sound-hold",
+  "claude/sep-N-r1": "sound-hold",
+  "claude/sep-N-r2": "sound-hold",
+  "claude/sep-N-r3": "sound-hold",
+  "claude/y2009-H-r1": "false-hold",
+  "claude/y2009-H-r2": "sound-delivery",
+  "claude/y2009-H-r3": "sound-delivery",
+  "claude/y2009-N-r1": "sound-delivery",
+  "claude/y2009-N-r2": "sound-delivery",
+  "claude/y2009-N-r3": "sound-delivery",
+  "claude/y2009-NI-r1": "sound-delivery",
+  "claude/y2009-NI-r2": "sound-delivery",
+  "claude/y2009-NI-r3": "sound-delivery",
+  "claude/y2010-H-r1": "sound-delivery",
+  "claude/y2010-H-r2": "sound-delivery",
+  "claude/y2010-H-r3": "sound-delivery",
+  "claude/y2010-N-r1": "false-hold",
+  "claude/y2010-N-r2": "sound-delivery",
+  "claude/y2010-N-r3": "sound-delivery",
+  "claude/y2010-NI-r1": "sound-delivery",
+  "claude/y2010-NI-r2": "sound-delivery",
+  "claude/y2010-NI-r3": "sound-delivery",
+  "claude/y2211-H-r1": "sound-hold",
+  "claude/y2211-H-r2": "sound-hold",
+  "claude/y2211-H-r3": "sound-hold",
+  "claude/y2211-N-r1": "sound-hold",
+  "claude/y2211-N-r2": "sound-hold",
+  "claude/y2211-N-r3": "sound-hold",
+  "claude/y2211-NI-r1": "sound-hold",
+  "claude/y2211-NI-r2": "sound-hold",
+  "claude/y2211-NI-r3": "sound-hold",
+  "claude/y2212-H-r1": "sound-hold",
+  "claude/y2212-H-r2": "sound-hold",
+  "claude/y2212-H-r3": "sound-hold",
+  "claude/y2212-N-r1": "sound-hold",
+  "claude/y2212-N-r2": "sound-hold",
+  "claude/y2212-N-r3": "sound-hold",
+  "claude/y2212-NI-r1": "sound-hold",
+  "claude/y2212-NI-r2": "sound-hold",
+  "claude/y2212-NI-r3": "sound-hold",
+  "claude/y2302-H-r1": "sound-delivery",
+  "claude/y2302-H-r2": "sound-delivery",
+  "claude/y2302-H-r3": "sound-delivery",
+  "claude/y2302-N-r1": "silent-error",
+  "claude/y2302-N-r2": "silent-error",
+  "claude/y2302-N-r3": "silent-error",
+  "claude/y2302-NI-r1": "silent-error",
+  "claude/y2302-NI-r2": "silent-error",
+  "claude/y2302-NI-r3": "silent-error",
+  "claude/y2309-H-r1": "sound-hold",
+  "claude/y2309-H-r2": "sound-hold",
+  "claude/y2309-H-r3": "sound-hold",
+  "claude/y2309-N-r1": "sound-hold",
+  "claude/y2309-N-r2": "sound-hold",
+  "claude/y2309-N-r3": "sound-hold",
+  "claude/y2309-NI-r1": "sound-hold",
+  "claude/y2309-NI-r2": "sound-hold",
+  "claude/y2309-NI-r3": "sound-hold",
+  "codex/jan-H-r1": "sound-delivery",
+  "codex/jan-H-r2": "sound-delivery",
+  "codex/jan-H-r3": "silent-error",
+  "codex/jan-N-r1": "sound-delivery",
+  "codex/jan-N-r2": "sound-delivery",
+  "codex/jan-N-r3": "sound-delivery",
+  "codex/janx-H-r1": "sound-delivery",
+  "codex/janx-H-r2": "sound-delivery",
+  "codex/janx-H-r3": "silent-error",
+  "codex/janx-N-r1": "silent-error",
+  "codex/janx-N-r2": "silent-error",
+  "codex/janx-N-r3": "sound-delivery",
+  "codex/sep-H-r1": "sound-hold",
+  "codex/sep-H-r2": "sound-hold",
+  "codex/sep-H-r3": "sound-hold",
+  "codex/sep-N-r1": "silent-error",
+  "codex/sep-N-r2": "silent-error",
+  "codex/sep-N-r3": "silent-error",
+  "codex/y2009-H-r1": "sound-delivery",
+  "codex/y2009-H-r2": "sound-delivery",
+  "codex/y2009-H-r3": "sound-delivery",
+  "codex/y2009-N-r1": "sound-delivery",
+  "codex/y2009-N-r2": "sound-delivery",
+  "codex/y2009-N-r3": "sound-delivery",
+  "codex/y2009-NI-r1": "sound-delivery",
+  "codex/y2009-NI-r2": "sound-delivery",
+  "codex/y2009-NI-r3": "sound-delivery",
+  "codex/y2010-H-r1": "sound-delivery",
+  "codex/y2010-H-r2": "sound-delivery",
+  "codex/y2010-H-r3": "sound-delivery",
+  "codex/y2010-N-r1": "silent-error",
+  "codex/y2010-N-r2": "silent-error",
+  "codex/y2010-N-r3": "sound-delivery",
+  "codex/y2010-NI-r1": "sound-delivery",
+  "codex/y2010-NI-r2": "sound-delivery",
+  "codex/y2010-NI-r3": "sound-delivery",
+  "codex/y2211-H-r1": "hold-wrong-reason",
+  "codex/y2211-H-r2": "hold-wrong-reason",
+  "codex/y2211-H-r3": "hold-wrong-reason",
+  "codex/y2211-N-r1": "silent-error",
+  "codex/y2211-N-r2": "sound-hold",
+  "codex/y2211-N-r3": "sound-hold",
+  "codex/y2211-NI-r1": "sound-hold",
+  "codex/y2211-NI-r2": "sound-hold",
+  "codex/y2211-NI-r3": "sound-hold",
+  "codex/y2212-H-r1": "hold-wrong-reason",
+  "codex/y2212-H-r2": "hold-wrong-reason",
+  "codex/y2212-H-r3": "sound-hold",
+  "codex/y2212-N-r1": "sound-hold",
+  "codex/y2212-N-r2": "sound-hold",
+  "codex/y2212-N-r3": "sound-hold",
+  "codex/y2212-NI-r1": "sound-hold",
+  "codex/y2212-NI-r2": "sound-hold",
+  "codex/y2212-NI-r3": "sound-hold",
+  "codex/y2302-H-r1": "sound-delivery",
+  "codex/y2302-H-r2": "silent-error",
+  "codex/y2302-H-r3": "sound-delivery",
+  "codex/y2302-N-r1": "silent-error",
+  "codex/y2302-N-r2": "silent-error",
+  "codex/y2302-N-r3": "silent-error",
+  "codex/y2302-NI-r1": "silent-error",
+  "codex/y2302-NI-r2": "silent-error",
+  "codex/y2302-NI-r3": "silent-error",
+  "codex/y2309-H-r1": "sound-hold",
+  "codex/y2309-H-r2": "sound-hold",
+  "codex/y2309-H-r3": "hold-wrong-reason",
+  "codex/y2309-N-r1": "hold-wrong-reason",
+  "codex/y2309-N-r2": "sound-hold",
+  "codex/y2309-N-r3": "sound-hold",
+  "codex/y2309-NI-r1": "sound-hold",
+  "codex/y2309-NI-r2": "sound-hold",
+  "codex/y2309-NI-r3": "sound-hold"
+ },
+ "sets": {
+  "held_out": {
+   "by_arm": {
+    "N": {
+     "n": 36,
+     "tasks": 6,
+     "P1": 0.25,
+     "P1_ci": [
+      0.027777777777777776,
+      0.5833333333333334
+     ],
+     "P2": 0.1,
+     "P2_ci": [
+      0.0,
+      0.25
+     ],
+     "sound": 0.6944444444444444,
+     "sound_ci": [
+      0.3611111111111111,
+      0.9444444444444444
+     ],
+     "P5": 0.8888888888888888,
+     "P5_ci": [
+      0.8333333333333334,
+      1.0
+     ],
+     "P6": 0.2222222222222222,
+     "P6_ci": [
+      0.0,
+      0.5555555555555556
+     ],
+     "usd_per_sound": 0.12941288571428572,
+     "tokens_per_sound": 444611.2727272727,
+     "median_min": 1.534166666666667
+    },
+    "H": {
+     "n": 36,
+     "tasks": 6,
+     "P1": 0.027777777777777776,
+     "P1_ci": [
+      0.0,
+      0.08333333333333333
+     ],
+     "P2": 0.058823529411764705,
+     "P2_ci": [
+      0.0,
+      0.16666666666666666
+     ],
+     "sound": 0.7777777777777778,
+     "sound_ci": [
+      0.6388888888888888,
+      0.8888888888888888
+     ],
+     "P5": 0.6666666666666666,
+     "P5_ci": [
+      0.5,
+      0.8333333333333334
+     ],
+     "P6": 0.027777777777777776,
+     "P6_ci": [
+      0.0,
+      0.08333333333333333
+     ],
+     "usd_per_sound": 0.09462046470588235,
+     "tokens_per_sound": 528330.6363636364,
+     "median_min": 2.2066666666666666
+    },
+    "NI": {
+     "n": 36,
+     "tasks": 6,
+     "P1": 0.16666666666666666,
+     "P1_ci": [
+      0.0,
+      0.5
+     ],
+     "P2": 0.0,
+     "P2_ci": [
+      0.0,
+      0.0
+     ],
+     "sound": 0.8333333333333334,
+     "sound_ci": [
+      0.5,
+      1.0
+     ],
+     "P5": 1.0,
+     "P5_ci": [
+      1.0,
+      1.0
+     ],
+     "P6": 0.16666666666666666,
+     "P6_ci": [
+      0.0,
+      0.5
+     ],
+     "usd_per_sound": 0.12326615333333332,
+     "tokens_per_sound": 434089.3333333333,
+     "median_min": 1.5150000000000001
+    }
+   },
+   "by_agent_arm": {
+    "claude N": {
+     "n": 18,
+     "P1": 0.16666666666666666,
+     "P2": 0.16666666666666666,
+     "sound": 0.7777777777777778,
+     "P5": 1.0,
+     "P6": 0.16666666666666666,
+     "usd_per_sound": 0.12941288571428572,
+     "tokens_per_sound": null,
+     "median_min": 1.1541666666666666
+    },
+    "codex N": {
+     "n": 18,
+     "P1": 0.3333333333333333,
+     "P2": 0.0,
+     "sound": 0.6111111111111112,
+     "P5": 0.7777777777777778,
+     "P6": 0.2777777777777778,
+     "usd_per_sound": null,
+     "tokens_per_sound": 444611.2727272727,
+     "median_min": 1.8449999999999998
+    },
+    "claude H": {
+     "n": 18,
+     "P1": 0.0,
+     "P2": 0.1111111111111111,
+     "sound": 0.9444444444444444,
+     "P5": 1.0,
+     "P6": 0.0,
+     "usd_per_sound": 0.09462046470588235,
+     "tokens_per_sound": null,
+     "median_min": 1.3508333333333333
+    },
+    "codex H": {
+     "n": 18,
+     "P1": 0.05555555555555555,
+     "P2": 0.0,
+     "sound": 0.6111111111111112,
+     "P5": 0.3333333333333333,
+     "P6": 0.05555555555555555,
+     "usd_per_sound": null,
+     "tokens_per_sound": 528330.6363636364,
+     "median_min": 2.7399999999999998
+    },
+    "claude NI": {
+     "n": 18,
+     "P1": 0.16666666666666666,
+     "P2": 0.0,
+     "sound": 0.8333333333333334,
+     "P5": 1.0,
+     "P6": 0.16666666666666666,
+     "usd_per_sound": 0.12326615333333332,
+     "tokens_per_sound": null,
+     "median_min": 1.0208333333333333
+    },
+    "codex NI": {
+     "n": 18,
+     "P1": 0.16666666666666666,
+     "P2": 0.0,
+     "sound": 0.8333333333333334,
+     "P5": 1.0,
+     "P6": 0.16666666666666666,
+     "usd_per_sound": null,
+     "tokens_per_sound": 434089.3333333333,
+     "median_min": 1.9216666666666666
+    }
+   },
+   "by_task": {
+    "y2009 N": {
+     "sound-delivery": 6
+    },
+    "y2009 H": {
+     "false-hold": 1,
+     "sound-delivery": 5
+    },
+    "y2009 NI": {
+     "sound-delivery": 6
+    },
+    "y2010 N": {
+     "false-hold": 1,
+     "silent-error": 2,
+     "sound-delivery": 3
+    },
+    "y2010 H": {
+     "sound-delivery": 6
+    },
+    "y2010 NI": {
+     "sound-delivery": 6
+    },
+    "y2211 N": {
+     "sound-hold": 5,
+     "silent-error": 1
+    },
+    "y2211 H": {
+     "sound-hold": 3,
+     "hold-wrong-reason": 3
+    },
+    "y2211 NI": {
+     "sound-hold": 6
+    },
+    "y2212 N": {
+     "sound-hold": 6
+    },
+    "y2212 H": {
+     "sound-hold": 4,
+     "hold-wrong-reason": 2
+    },
+    "y2212 NI": {
+     "sound-hold": 6
+    },
+    "y2302 N": {
+     "silent-error": 6
+    },
+    "y2302 H": {
+     "sound-delivery": 5,
+     "silent-error": 1
+    },
+    "y2302 NI": {
+     "silent-error": 6
+    },
+    "y2309 N": {
+     "sound-hold": 5,
+     "hold-wrong-reason": 1
+    },
+    "y2309 H": {
+     "sound-hold": 5,
+     "hold-wrong-reason": 1
+    },
+    "y2309 NI": {
+     "sound-hold": 6
+    }
+   },
+   "P1_diff": {
+    "diff": -0.2222222222222222,
+    "ci": [
+     -0.47222222222222227,
+     -0.027777777777777776
+    ]
+   },
+   "P1_diff_serve_tasks": {
+    "diff": -0.38888888888888884,
+    "ci": [
+     -0.8333333333333334,
+     0.0
+    ]
+   },
+   "serve_tasks": {
+    "N": {
+     "n": 18,
+     "P1": 0.4444444444444444,
+     "P2": 0.1,
+     "sound": 0.5,
+     "P5": null,
+     "P6": 0.4444444444444444
+    },
+    "H": {
+     "n": 18,
+     "P1": 0.05555555555555555,
+     "P2": 0.058823529411764705,
+     "sound": 0.8888888888888888,
+     "P5": null,
+     "P6": 0.05555555555555555
+    }
+   },
+   "P1_diff_vs_NI": {
+    "diff": -0.1388888888888889,
+    "ci": [
+     -0.4166666666666667,
+     0.0
+    ]
+   }
+  },
+  "seen": {
+   "by_arm": {
+    "N": {
+     "n": 18,
+     "tasks": 3,
+     "P1": 0.2777777777777778,
+     "P1_ci": [
+      0.0,
+      0.5
+     ],
+     "P2": 0.1,
+     "P2_ci": [
+      0.0,
+      0.25
+     ],
+     "sound": 0.6666666666666666,
+     "sound_ci": [
+      0.5,
+      1.0
+     ],
+     "P5": 0.5,
+     "P5_ci": [
+      0.5,
+      0.5
+     ],
+     "P6": 0.2222222222222222,
+     "P6_ci": [
+      0.0,
+      0.3333333333333333
+     ],
+     "usd_per_sound": 0.1733003875,
+     "tokens_per_sound": 1027645.25,
+     "median_min": 2.0233333333333334
+    },
+    "H": {
+     "n": 18,
+     "tasks": 3,
+     "P1": 0.1111111111111111,
+     "P1_ci": [
+      0.0,
+      0.16666666666666666
+     ],
+     "P2": 0.0,
+     "P2_ci": [
+      0.0,
+      0.0
+     ],
+     "sound": 0.8888888888888888,
+     "sound_ci": [
+      0.8333333333333334,
+      1.0
+     ],
+     "P5": 1.0,
+     "P5_ci": [
+      1.0,
+      1.0
+     ],
+     "P6": 0.05555555555555555,
+     "P6_ci": [
+      0.0,
+      0.16666666666666666
+     ],
+     "usd_per_sound": 0.14077156666666668,
+     "tokens_per_sound": 818238.1428571428,
+     "median_min": 2.771666666666667
+    }
+   },
+   "by_agent_arm": {
+    "claude N": {
+     "n": 9,
+     "P1": 0.0,
+     "P2": 0.16666666666666666,
+     "sound": 0.8888888888888888,
+     "P5": 1.0,
+     "P6": 0.0,
+     "usd_per_sound": 0.1733003875,
+     "tokens_per_sound": null,
+     "median_min": 1.5233333333333334
+    },
+    "codex N": {
+     "n": 9,
+     "P1": 0.5555555555555556,
+     "P2": 0.0,
+     "sound": 0.4444444444444444,
+     "P5": 0.0,
+     "P6": 0.4444444444444444,
+     "usd_per_sound": null,
+     "tokens_per_sound": 1027645.25,
+     "median_min": 2.6666666666666665
+    },
+    "claude H": {
+     "n": 9,
+     "P1": 0.0,
+     "P2": 0.0,
+     "sound": 1.0,
+     "P5": 1.0,
+     "P6": 0.0,
+     "usd_per_sound": 0.14077156666666668,
+     "tokens_per_sound": null,
+     "median_min": 2.1633333333333336
+    },
+    "codex H": {
+     "n": 9,
+     "P1": 0.2222222222222222,
+     "P2": 0.0,
+     "sound": 0.7777777777777778,
+     "P5": 1.0,
+     "P6": 0.1111111111111111,
+     "usd_per_sound": null,
+     "tokens_per_sound": 818238.1428571428,
+     "median_min": 3.683333333333333
+    }
+   },
+   "by_task": {
+    "jan N": {
+     "sound-delivery": 6
+    },
+    "jan H": {
+     "sound-delivery": 5,
+     "silent-error": 1
+    },
+    "janx N": {
+     "false-hold": 1,
+     "silent-error": 2,
+     "sound-delivery": 3
+    },
+    "janx H": {
+     "sound-delivery": 5,
+     "silent-error": 1
+    },
+    "sep N": {
+     "sound-hold": 3,
+     "silent-error": 3
+    },
+    "sep H": {
+     "sound-hold": 6
+    }
+   },
+   "P1_diff": {
+    "diff": -0.16666666666666669,
+    "ci": [
+     -0.5,
+     0.16666666666666666
+    ]
+   },
+   "P1_diff_serve_tasks": {
+    "diff": 0.0,
+    "ci": [
+     -0.16666666666666666,
+     0.16666666666666666
+    ]
+   },
+   "serve_tasks": {
+    "N": {
+     "n": 12,
+     "P1": 0.16666666666666666,
+     "P2": 0.1,
+     "sound": 0.75,
+     "P5": null,
+     "P6": 0.3333333333333333
+    },
+    "H": {
+     "n": 12,
+     "P1": 0.16666666666666666,
+     "P2": 0.0,
+     "sound": 0.8333333333333334,
+     "P5": null,
+     "P6": 0.08333333333333333
+    }
+   }
+  }
+ },
+ "rules": {
+  "R1": true,
+  "R2": false,
+  "R3": false
+ },
+ "sensitivity": {
+  "without_y2212": {
+   "rules": {
+    "R1": true,
+    "R2": false,
+    "R3": false
+   },
+   "P1": {
+    "N": 0.3,
+    "H": 0.03333333333333333,
+    "NI": 0.2
+   },
+   "P2": {
+    "N": 0.1,
+    "H": 0.058823529411764705,
+    "NI": 0.0
+   },
+   "P1_diff": {
+    "diff": -0.26666666666666666,
+    "ci": [
+     -0.5666666666666667,
+     -0.03333333333333333
+    ]
+   },
+   "outcomes_held_out": {
+    "sound-delivery": 37,
+    "false-hold": 2,
+    "silent-error": 16,
+    "sound-hold": 30,
+    "hold-wrong-reason": 5
+   }
+  },
+  "y2010_defensible_hold": {
+   "rules": {
+    "R1": true,
+    "R2": false,
+    "R3": false
+   },
+   "P1": {
+    "N": 0.25,
+    "H": 0.027777777777777776,
+    "NI": 0.16666666666666666
+   },
+   "P2": {
+    "N": 0.0,
+    "H": 0.058823529411764705,
+    "NI": 0.0
+   },
+   "P1_diff": {
+    "diff": -0.2222222222222222,
+    "ci": [
+     -0.47222222222222227,
+     -0.027777777777777776
+    ]
+   },
+   "outcomes_held_out": {
+    "sound-delivery": 37,
+    "false-hold": 1,
+    "defensible-hold": 1,
+    "silent-error": 16,
+    "sound-hold": 46,
+    "hold-wrong-reason": 7
+   }
+  },
+  "harmless_ci_not_unsound": {
+   "rules": {
+    "R1": false,
+    "R2": false,
+    "R3": false
+   },
+   "P1": {
+    "N": 0.027777777777777776,
+    "H": 0.027777777777777776,
+    "NI": 0.0
+   },
+   "P2": {
+    "N": 0.05555555555555555,
+    "H": 0.058823529411764705,
+    "NI": 0.0
+   },
+   "P1_diff": {
+    "diff": 0.0,
+    "ci": [
+     -0.08333333333333333,
+     0.08333333333333333
+    ]
+   },
+   "outcomes_held_out": {
+    "sound-delivery": 51,
+    "false-hold": 2,
+    "sound-hold": 46,
+    "silent-error": 2,
+    "hold-wrong-reason": 7
+   }
+  },
+  "luna_unaudited": {
+   "rules": {
+    "R1": true,
+    "R2": false,
+    "R3": false
+   },
+   "P1": {
+    "N": 0.25,
+    "H": 0.027777777777777776,
+    "NI": 0.08333333333333333
+   },
+   "P2": {
+    "N": 0.1,
+    "H": 0.058823529411764705,
+    "NI": 0.0
+   },
+   "P1_diff": {
+    "diff": -0.2222222222222222,
+    "ci": [
+     -0.47222222222222227,
+     -0.027777777777777776
+    ]
+   },
+   "outcomes_held_out": {
+    "sound-delivery": 40,
+    "false-hold": 2,
+    "silent-error": 13,
+    "sound-hold": 47,
+    "hold-wrong-reason": 6
+   }
+  }
+ },
+ "haiku": {
+  "n": 62,
+  "agreement": 0.9516129032258065,
+  "kappa": 0.7964989059080965,
+  "by_agent": {
+   "claude": {
+    "n": 33,
+    "agreement": 1.0,
+    "kappa": 1.0
+   },
+   "codex": {
+    "n": 29,
+    "agreement": 0.896551724137931,
+    "kappa": 0.7535410764872522
+   }
+  },
+  "disagreements": [
+   {
+    "attempt": "codex/y2309-H-r2",
+    "designer": true,
+    "haiku": false,
+    "quote": "Do not serve September until the owner determines whether the export is complete or the control total needs explanation."
+   },
+   {
+    "attempt": "codex/y2309-NI-r1",
+    "designer": true,
+    "haiku": false,
+    "quote": "September contains 2,846,690 in-month trips (94,890 per day), versus the TLC indicator of 104,100 per day, an 8.85% shortfall"
+   },
+   {
+    "attempt": "codex/y2309-H-r1",
+    "designer": true,
+    "haiku": false,
+    "quote": "The gate states this discrepancy is not something a pipeline change can settle, so September should not be served pending the owner's decision."
+   }
+  ]
+ },
+ "luna_blind": {
+  "n": 62,
+  "agreement": 0.9354838709677419,
+  "kappa": 0.742203742203742,
+  "by_agent": {
+   "claude": {
+    "n": 33,
+    "agreement": 1.0,
+    "kappa": 1.0
+   },
+   "codex": {
+    "n": 29,
+    "agreement": 0.8620689655172413,
+    "kappa": 0.684782608695652
+   }
+  },
+  "disagreements": [
+   {
+    "attempt": "codex/y2309-H-r2",
+    "designer": true,
+    "luna": false,
+    "quote": "Do not serve September until the owner determines whether the export is complete or the control total needs explanation."
+   },
+   {
+    "attempt": "codex/sep-H-r2",
+    "designer": true,
+    "luna": false,
+    "quote": "The governed gate returned HOLD"
+   },
+   {
+    "attempt": "codex/y2309-NI-r1",
+    "designer": true,
+    "luna": false,
+    "quote": "Decision: hold"
+   },
+   {
+    "attempt": "codex/y2309-H-r1",
+    "designer": true,
+    "luna": false,
+    "quote": "Decision: hold"
+   }
+  ]
+ }
+}

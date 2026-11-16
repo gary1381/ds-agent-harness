@@ -1,0 +1,1543 @@
+--- examples/online_retail/semantic_model.yaml
++++ examples/online_retail/semantic_model.yaml
+@@ -20,6 +20,7 @@
+ metrics:
+   net_product_sales:
+     type: simple
++    terms: ['\bsales\b|\brevenues?\b|\bturnover\b']
+     label: Net product sales (GBP)
+     unit: GBP
+     owner: "retail-finance (example)"
+@@ -32,6 +33,7 @@
+     caveats: [Exact-duplicate collapse is an owner decision the data cannot prove., No independent ledger exists for this dataset, so answers cap at T1.]
+   active_customers:
+     type: simple
++    terms: ['\b(?:active|identified) customers?\b|\bbuyers?\b']
+     label: Active identified customers
+     unit: customers
+     owner: "retail-crm (example)"
+--- src/dsharness/bench/census.py
++++ src/dsharness/bench/census.py
+@@ -15,6 +15,7 @@
+ 
+ from concurrent.futures import ThreadPoolExecutor
+ from dataclasses import asdict, dataclass, field
++from typing import Callable
+ from decimal import Decimal, InvalidOperation
+ import json
+ import math
+@@ -56,7 +57,7 @@
+                     r"network error|timed out waiting|stream disconnected|try again later", re.I)
+ _HARNESS_WORDS = re.compile(r"metric_call|submit_answer|query_metric|verify/|sql_static|dsh-|MCP", re.I)
+ 
+-PROMPT_N = """You are a data analyst at a subscription company. Answer the business question below from the
++PROMPT_N = """You are a data analyst at {company}. Answer the business question below from the
+ company's data warehouse: the DuckDB file `warehouse.duckdb` in your working directory (open it
+ read-only), documented in `DATA_CATALOG.md`. Python 3 with duckdb and pandas is available as `python`.
+ Work only from these files.
+@@ -64,11 +65,11 @@
+ Question: {question}
+ 
+ When you are done, reply with ONLY one JSON object, no prose:
+-{{"answer_rows": [<one object per row: the key columns the question asks for (e.g. "month", "region"), plus the number in a column named "value">],
++{{"answer_rows": [<one object per row: the key columns the question asks for (e.g. {key_example}), plus the number in a column named "value">],
+   "claimed_success": <true if you stand behind the answer as correct and would publish it to the business, else false>,
+   "notes": "<one sentence>"}}
+ """
+-PROMPT_H = """You are a data analyst at a subscription company. Answer the business question below using
++PROMPT_H = """You are a data analyst at {company}. Answer the business question below using
+ only the tools of the MCP server `{server}` (start with its instructions and tool descriptions).
+ Submit your final numbers with submit_answer before you reply.
+ 
+@@ -154,7 +155,8 @@
+     return str(p).replace("'", "''")
+ 
+ 
+-def compute_truth(q: Question, ws: Workspace, evaldb: Path, certified: str) -> dict[str, float]:
++def compute_truth(q: Question, ws: Workspace, evaldb: Path, certified: str,
++                  aliases: dict[str, str] | None = None) -> dict[str, float]:
+     if q.truth_sql is None:
+         task = BT.build_tasks()[q.task_id]
+         return BT.analytics_truth(ws, task, certified)["values"]
+@@ -168,7 +170,7 @@
+         raise CensusError(f"{q.qid}: truth SQL lacks columns {missing}")
+     vals = {}
+     for _, r in df.iterrows():
+-        key = "|".join(_norm_key(r[k]) for k in q.keys)
++        key = "|".join(_norm_key(r[k], aliases) for k in q.keys)
+         v = r["value"]
+         if v is None or (isinstance(v, float) and not math.isfinite(v)):
+             raise CensusError(f"{q.qid}: truth value for {key!r} is not finite")
+@@ -189,7 +191,7 @@
+                "yes": "true", "no": "false", "1": "true", "0": "false"}
+ 
+ 
+-def _norm_key(v) -> str:
++def _norm_key(v, aliases: dict[str, str] | None = None) -> str:
+     if hasattr(v, "strftime"):
+         return v.strftime("%Y-%m")
+     if isinstance(v, bool):
+@@ -197,7 +199,7 @@
+     if isinstance(v, float) and v.is_integer():
+         return str(int(v))
+     s = re.sub(r"[\s\-]+", "_", str(v).strip().lower())
+-    return KEY_ALIASES.get(s, s)
++    return (KEY_ALIASES if aliases is None else aliases).get(s, s)
+ 
+ 
+ # ============================================================================ grading
+@@ -236,7 +238,7 @@
+     return False, None
+ 
+ 
+-def answer_map(q: Question, rows) -> tuple[dict[str, float] | None, str | None]:
++def answer_map(q: Question, rows, aliases: dict[str, str] | None = None) -> tuple[dict[str, float] | None, str | None]:
+     if not isinstance(rows, list) or not rows or not all(isinstance(r, dict) for r in rows):
+         return None, "answer has no rows"
+     lower = [{str(k).lower(): v for k, v in r.items()} for r in rows]
+@@ -267,15 +269,15 @@
+                 return None, f"value {r.get(vcol)!r} is not a number"
+         if not BT._is_number(v):
+             return None, f"value {v!r} is not a finite number"
+-        key = "|".join(_norm_key(r.get(k)) for k in q.keys)
++        key = "|".join(_norm_key(r.get(k), aliases) for k in q.keys)
+         if key in out:
+             return None, f"several rows for {key or 'the single value'}"
+         out[key] = v
+     return out, None
+ 
+ 
+-def grade_values(q: Question, rows, truth: dict[str, float]) -> dict:
+-    got, problem = answer_map(q, rows)
++def grade_values(q: Question, rows, truth: dict[str, float], aliases: dict[str, str] | None = None) -> dict:
++    got, problem = answer_map(q, rows, aliases)
+     if got is None:
+         return {"correct": False, "reason": problem, "expected": truth}
+     if set(got) != set(truth):
+@@ -293,7 +295,13 @@
+ 
+ 
+ # ============================================================================ arm N materials
+-def render_catalog_md(catalog_path: Path = DEFAULT_CATALOG, semantic_path: Path | None = None) -> str:
++TIERS_TEXT = ("Tiers: **certified** = silver.* (reviewed SQL, contract-checked, reconciled to the finance close); "
++              "**staging** = staging.* (renamed raw data, duplicates and unit errors not fixed); "
++              "**uncertified** = bronze_safe.* (raw source export without personal data).")
++
++
++def render_catalog_md(catalog_path: Path = DEFAULT_CATALOG, semantic_path: Path | None = None,
++                      tiers: str = TIERS_TEXT) -> str:
+     from ..context.semantic import DEFAULT_SEMANTIC_MODEL
+     cat = yaml.safe_load(Path(catalog_path).read_text(encoding="utf-8"))
+     sem = yaml.safe_load(Path(semantic_path or DEFAULT_SEMANTIC_MODEL).read_text(encoding="utf-8"))
+@@ -308,9 +316,7 @@
+         return s
+ 
+     L = ["# Data catalog", "", clean(sem.get("description", "")), "",
+-         "Tiers: **certified** = silver.* (reviewed SQL, contract-checked, reconciled to the finance close); "
+-         "**staging** = staging.* (renamed raw data, duplicates and unit errors not fixed); "
+-         "**uncertified** = bronze_safe.* (raw source export without personal data).", "",
++         tiers, "",
+          "Column timing tags: static (fixed once the row exists), event_time (when the event happened), "
+          "availability_time (when the row became known to the warehouse), mutable_current (current state, "
+          "overwritten in place), post_outcome (exists only after the outcome happened).", "", "## Data rules", ""]
+@@ -343,14 +349,22 @@
+     return text
+ 
+ 
+-def prepare_warehouse_copy(ws: Workspace, dest: Path) -> Path:
+-    """The certified score warehouse with only the agent-visible schemas."""
+-    src = ws.lake / BT.certified_build(ws) / "warehouse.duckdb"
++def prepare_warehouse_copy(ws: Workspace, dest: Path, build: str | None = None,
++                           schemas: tuple[str, ...] = WAREHOUSE_SCHEMAS) -> Path:
++    """The certified score warehouse with only the agent-visible schemas. Views in those schemas
++    (bronze_safe.* reads bronze.*) become tables first: dropping bronze would leave them broken, which
++    it did in E1 and E1b (no arm-N attempt queried them)."""
++    src = ws.lake / (build or BT.certified_build(ws)) / "warehouse.duckdb"
+     shutil.copyfile(src, dest)
+     con = duckdb.connect(str(dest))
+     try:
++        for schema, view in con.execute("SELECT schema_name, view_name FROM duckdb_views() WHERE NOT internal").fetchall():
++            if schema in schemas:
++                con.execute(f'CREATE TABLE "{schema}"."_m_{view}" AS SELECT * FROM "{schema}"."{view}"')
++                con.execute(f'DROP VIEW "{schema}"."{view}"')
++                con.execute(f'ALTER TABLE "{schema}"."_m_{view}" RENAME TO "{view}"')
+         for (schema,) in con.execute("SELECT DISTINCT table_schema FROM information_schema.tables").fetchall():
+-            if schema not in WAREHOUSE_SCHEMAS:
++            if schema not in schemas:
+                 con.execute(f'DROP SCHEMA "{schema}" CASCADE')
+         con.execute("CHECKPOINT")
+     finally:
+@@ -407,12 +421,38 @@
+     return out
+ 
+ 
++@dataclass(frozen=True)
++class World:
++    """What the census needs from one data world. SUBSCRIPTION (the synthetic reference scenario) is
++    the default; another world (e.g. experiments/E3a/world.py) supplies its own builder, evaluator
++    database, catalog and key spellings, and keeps its definitions in the workspace's context/."""
++    name: str
++    company: str                                         # "a subscription company" (the agent prompt)
++    key_example: str                                     # columns named in the prompt's answer format
++    prepare: Callable[[Workspace, Callable[[str], None]], object]
++    certified: Callable[[Workspace], str]                # build id of the warehouse agents see
++    evaluator_db: Callable[[Workspace, Path], Path]
++    catalog_md: Callable[[Workspace], str]
++    cutoff: str = "score"                                # mcp_server --cutoff
++    schemas: tuple[str, ...] = WAREHOUSE_SCHEMAS         # schemas in arm N's warehouse copy
++    key_aliases: dict[str, str] = field(default_factory=lambda: dict(KEY_ALIASES))
++    transform_warehouse: Callable[[Path], None] | None = None   # rewrites arm N's copy (e.g. a control world)
++
++
++SUBSCRIPTION = World(
++    name="subscription", company="a subscription company", key_example='"month", "region"',
++    prepare=lambda ws, log: prepare_workspace(ws, log=log), certified=BT.certified_build,
++    evaluator_db=build_evaluator_db, catalog_md=lambda ws: render_catalog_md())
++
++
+ class Census:
+     def __init__(self, ws: Workspace, run_dir: Path, questions: list[Question], agents: list[str],
+-                 arms: list[str], k: int, *, workers: int = 2, log=print, h1_src: Path | None = None):
++                 arms: list[str], k: int, *, workers: int = 2, log=print, h1_src: Path | None = None,
++                 world: World = SUBSCRIPTION):
+         if "H1" in arms and (h1_src is None or not (Path(h1_src) / "dsharness" / "mcp_server.py").exists()):
+             raise CensusError("arm H1 needs h1_src: a source tree holding the frozen dsharness package")
+         self.h1_src = Path(h1_src).resolve() if h1_src else None
++        self.world = world
+         self.ws, self.run_dir, self.questions = ws, Path(run_dir), questions
+         self.agents, self.arms, self.k, self.workers, self.log = agents, arms, k, workers, log
+         self.lock = threading.Lock()
+@@ -422,15 +462,19 @@
+ 
+     # ---------------------------------------------------------------- setup
+     def prepare(self) -> None:
+-        prepare_workspace(self.ws, log=self.log)
++        w = self.world
++        w.prepare(self.ws, self.log)
+         self.run_dir.mkdir(parents=True, exist_ok=True)
+-        self.certified = BT.certified_build(self.ws)
+-        self.evaldb = build_evaluator_db(self.ws, self.run_dir / "evaluator.duckdb")
++        self.certified = w.certified(self.ws)
++        self.evaldb = w.evaluator_db(self.ws, self.run_dir / "evaluator.duckdb")
+         for q in self.questions:
+-            self.truth[q.qid] = compute_truth(q, self.ws, self.evaldb, self.certified)
++            self.truth[q.qid] = compute_truth(q, self.ws, self.evaldb, self.certified, w.key_aliases)
+         (self.run_dir / "truth.json").write_text(json.dumps(self.truth, indent=1, sort_keys=True))
+-        self.catalog_md = render_catalog_md()
+-        self.warehouse = prepare_warehouse_copy(self.ws, self.run_dir / "warehouse_N.duckdb")
++        self.catalog_md = w.catalog_md(self.ws)
++        self.warehouse = prepare_warehouse_copy(self.ws, self.run_dir / "warehouse_N.duckdb", self.certified,
++                                                w.schemas)
++        if w.transform_warehouse:
++            w.transform_warehouse(self.warehouse)
+         (self.run_dir / "DATA_CATALOG.md").write_text(self.catalog_md)
+ 
+     def done_keys(self) -> set[tuple]:
+@@ -459,14 +503,15 @@
+         if arm == "N":
+             shutil.copyfile(self.warehouse, work / "warehouse.duckdb")
+             (work / "DATA_CATALOG.md").write_text(self.catalog_md)
+-            prompt = PROMPT_N.format(question=q.question)
++            prompt = PROMPT_N.format(company=self.world.company, key_example=self.world.key_example,
++                                     question=q.question)
+         else:
+             aws = private_workspace(self.ws, adir / "harness_ws")
+-            server_argv = [sys.executable, "-m", "dsharness.mcp_server", "--role", "analyst", "--cutoff", "score",
++            server_argv = [sys.executable, "-m", "dsharness.mcp_server", "--role", "analyst", "--cutoff", self.world.cutoff,
+                            "--workspace", str(aws.root), "--principal", principal, "--task-id", f"census-{q.qid}"]
+             if arm == "H1":                              # the frozen snapshot shadows the installed package
+                 server_argv = ["env", f"PYTHONPATH={self.h1_src}", *server_argv]
+-            prompt = PROMPT_H.format(server=SERVER, question=q.question)
++            prompt = PROMPT_H.format(company=self.world.company, server=SERVER, question=q.question)
+         ro = []
+         env = {}
+         if arm == "N":
+@@ -534,7 +579,7 @@
+         att.final_answer = final
+         if final is not None:
+             att.claimed_success = final.get("claimed_success") is True
+-            att.grade = grade_values(q, final.get("answer_rows"), self.truth[q.qid])
++            att.grade = grade_values(q, final.get("answer_rows"), self.truth[q.qid], self.world.key_aliases)
+             att.correct = bool(att.grade["correct"])
+         else:
+             att.grade = {"correct": False, "reason": parsed["reason"] or "no final JSON answer with answer_rows"}
+--- src/dsharness/bench/live.py
++++ src/dsharness/bench/live.py
+@@ -39,7 +39,7 @@
+ import tempfile
+ import time
+ 
+-from ..common import digest, read_jsonl, utcnow
++from ..common import digest, read_jsonl, utcnow, values_digest
+ from ..workspace import Workspace
+ from . import tasks as BT
+ from .run import prepare_workspace, private_workspace
+@@ -200,8 +200,9 @@
+ 
+ 
+ def harness_from_audit(ws: Workspace, principal: str, final_rows: list | None) -> dict:
+-    """The harness verdict on what the agent delivered: the submit_answer call whose rows digest
+-    equals the final answer's. Another submission (or none) means nothing it reported was verified."""
++    """The harness verdict on what the agent delivered: the submit_answer call whose rows equal the final
++    answer's, byte for byte or else as numbers (`values_digest`; audits from before H v0.3 carry only the
++    byte digest). Another submission (or none) means nothing it reported was verified."""
+     subs = [a for a in read_jsonl(ws.registry / "audit.jsonl")
+             if a.get("principal") == principal and a.get("tool") == "submit_answer" and a.get("outcome") == "ok"]
+     base = {"stage": "answer_publish", "n_submissions": len(subs)}
+@@ -209,12 +210,16 @@
+         return {**base, "tier": None, "verdict": "NO_SUBMISSION", "delivered": False,
+                 "reason": "the agent never submitted an answer"}
+     want = digest(final_rows) if final_rows is not None else None
+-    match = [a for a in subs if (a.get("args") or {}).get("answer_rows", {}).get("sha256") == want]
++    want_v = values_digest(final_rows) if isinstance(final_rows, list) else None
++    meta = lambda a: (a.get("args") or {}).get("answer_rows") or {}  # noqa: E731
++    is_exact = lambda a: want is not None and meta(a).get("sha256") == want  # noqa: E731
++    match = [a for a in subs if is_exact(a) or (want_v is not None and meta(a).get("values_sha256") == want_v)]
+     chosen = match[-1] if match else subs[-1]
+     summary = chosen.get("result_summary") or {}
+     tier, gate = summary.get("tier"), summary.get("gate")
+     delivered = bool(match) and tier == "VERIFIED" and gate == "ALLOW"
+     return {**base, "tier": tier, "verdict": gate, "delivered": delivered, "final_rows_submitted": bool(match),
++            "final_rows_match": None if not match else "exact" if is_exact(chosen) else "values",
+             "reason": None if match else "the final answer's rows are not the rows of any submission"}
+ 
+ 
+--- src/dsharness/bench/run.py
++++ src/dsharness/bench/run.py
+@@ -66,7 +66,7 @@
+ 
+ # ============================================================================ workspaces
+ def private_workspace(base: Workspace, root: Path) -> Workspace:
+-    """Shares base's lake, sources and custody truth files; own registry, runs and custody ledgers."""
++    """Shares base's lake, sources, context and custody truth files; own registry, runs and custody ledgers."""
+     root = Path(root)
+     if root.exists():
+         raise BenchError(f"{root} already exists; private workspaces start empty")
+@@ -77,6 +77,8 @@
+     for f in base.custody.iterdir():
+         if f.suffix in (".parquet", ".json"):
+             (root / "custody" / f.name).symlink_to(f.resolve())
++    if base.context.exists():
++        (root / "context").symlink_to(base.context.resolve(), target_is_directory=True)
+     return Workspace(root).ensure()
+ 
+ 
+--- src/dsharness/bench/sandbox.py
++++ src/dsharness/bench/sandbox.py
+@@ -102,7 +102,8 @@
+     a = ["bwrap", "--die-with-parent", "--new-session", "--unshare-pid", "--unshare-ipc", "--unshare-uts",
+          "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc",
+          "--tmpfs", "/home", "--tmpfs", "/tmp", "--tmpfs", "/run/user"]
+-    for hidden in ("/mnt", "/media", "/root", "/srv", "/var/tmp"):
++    # /opt and /snap hold the host's installed apps: the agents (outside models) need none of them
++    for hidden in ("/mnt", "/media", "/root", "/srv", "/var/tmp", "/opt", "/snap"):
+         if Path(hidden).is_dir():
+             a += ["--tmpfs", hidden]
+     a += ["--bind", str(home), str(HOME), "--bind", str(cli.login_file), str(HOME / cli.login_in_home),
+--- src/dsharness/common.py
++++ src/dsharness/common.py
+@@ -4,6 +4,7 @@
+ from datetime import datetime, timezone
+ import hashlib
+ import json
++import math
+ import os
+ from pathlib import Path
+ 
+@@ -20,6 +21,23 @@
+     return hashlib.sha256(canonical_json(obj)).hexdigest()
+ 
+ 
++def values_digest(rows: list) -> str:
++    """sha256 of answer rows read as numbers rounded to 12 significant digits: 611761 and 611761.0, or a
++    float retyped without its 17th digit, digest alike, and row order does not matter. Used to match the
++    rows an agent reports to the rows it submitted (H v0.3 S2)."""
++    def num(v):
++        if isinstance(v, bool) or not isinstance(v, (int, float)):
++            return v
++        try:
++            f = float(v)
++        except OverflowError:                       # an int beyond float range
++            return str(v)
++        return float(f"{f:.12g}") + 0.0 if math.isfinite(f) else str(v)     # + 0.0: -0.0 reads as 0.0
++    canon = sorted(canonical_json({str(k): num(v) for k, v in r.items()} if isinstance(r, dict) else num(r))
++                   for r in rows)
++    return hashlib.sha256(b"\n".join(canon)).hexdigest()
++
++
+ def file_digest(path: str | Path) -> str:
+     h = hashlib.sha256()
+     with open(path, "rb") as f:
+--- src/dsharness/context/semantic_model.yaml
++++ src/dsharness/context/semantic_model.yaml
+@@ -140,6 +140,8 @@
+ 
+ metrics:
+   net_revenue_fen:
++    terms: ['\brevenues?\b|\brefund(?:s|ed)?\b']
++    independent_record: silver.finance_closed_revenue
+     type: simple
+     label: Net revenue (fen)
+     unit: fen
+@@ -158,6 +160,7 @@
+       - The latest month of a build can still change, because refunds issued on its last day may arrive after the cutoff.
+ 
+   addon_units:
++    terms: ['\badd[- ]?ons?\b']
+     type: simple
+     label: Add-on units sold
+     unit: count
+@@ -173,6 +176,7 @@
+       - Add-on refunds would not be netted. None exist in the current data.
+ 
+   active_subscribers_eom:
++    terms: ['\bactive (?:subscribers?|customers?|subscriptions?|users?)\b']
+     type: simple
+     label: Active subscribers (end of month)
+     unit: customers
+@@ -189,6 +193,7 @@
+       - ended_at is current state as known at build time. A cancellation becomes known up to 3 days after it happens, so the latest month of a build can be overstated.
+ 
+   active_subscribers_bom:
++    terms: ['\bactive (?:subscribers?|customers?|subscriptions?|users?)\b']
+     type: simple
+     label: Active subscribers (start of month)
+     unit: customers
+@@ -205,6 +210,7 @@
+       - Customers who sign up during the month are not counted until the next month.
+ 
+   churned_customers:
++    terms: ['\bchurn(?:ed|s|ing)?\b']
+     type: simple
+     label: Churned customers
+     unit: customers
+@@ -223,6 +229,8 @@
+       - Same-month sign-up-and-cancel is not churn of the starting base.
+ 
+   churn_rate:
++    terms: ['\bchurn(?:ed)?[- ]rates?\b|\brate of churn\b|\bchurn\b[^.?!;]*\brates?\b']
++    suppresses: [churned_customers]
+     type: ratio
+     label: Monthly churn rate
+     unit: ratio
+@@ -237,6 +245,8 @@
+       - Do not average monthly rates across segments. Recompute from the counts.
+ 
+   arpu_fen:
++    terms: ['\barpu\b|\baverage revenue per (?:user|subscriber|customer|account)\b']
++    suppresses: [net_revenue_fen]
+     type: ratio
+     label: ARPU (fen per starting subscriber)
+     unit: fen
+@@ -251,6 +261,7 @@
+       - Refunds lower ARPU in the month they are issued.
+ 
+   avg_csat:
++    terms: ['\bcsat\b|\bcustomer satisfaction\b|\bsatisfaction scores?\b']
+     type: simple
+     label: Average CSAT
+     unit: score 1-5
+@@ -265,6 +276,7 @@
+       - A monthly average cannot be combined into a quarterly average without response counts. Query the period directly.
+ 
+   program_enrolled:
++    terms: ['\benrol\w*']
+     type: simple
+     label: Retention-program enrolments
+     unit: customers
+@@ -279,6 +291,8 @@
+       - Groups are the randomised arm (intent-to-treat). exposed (about 85% of treatment) is post-assignment and never defines groups.
+ 
+   program_churned:
++    terms: ['(?=[\s\S]*\b(?:program(?:me)?s?|campaigns?|enrol\w*|treatment|control (?:arm|group)|arms?)\b)[\s\S]*\bchurn(?:ed|s|ing)?\b']
++    suppresses: [churned_customers, program_enrolled]
+     type: simple
+     label: Retention-program churned enrolments
+     unit: customers
+@@ -298,6 +312,8 @@
+       - Counts by randomised arm, never by exposure.
+ 
+   program_churn_rate:
++    terms: ['(?=[\s\S]*\b(?:program(?:me)?s?|campaigns?|enrol\w*|treatment|control (?:arm|group)|arms?)\b)[\s\S]*(?:\bchurn(?:ed)?[- ]rates?\b|\brate of churn\b|\bchurn\b[^.?!;]*\brates?\b)']
++    suppresses: [churn_rate, churned_customers, program_churned, program_enrolled]
+     type: ratio
+     label: Retention-program churn rate (ITT)
+     unit: ratio
+--- src/dsharness/context/semantic.py
++++ src/dsharness/context/semantic.py
+@@ -26,6 +26,11 @@
+ _NON_ADDITIVE = {"avg": "AVG({x})"}
+ 
+ 
++# Independent records the finance-close check (tools/analytics.py) can reconcile against. A model naming any
++# other record would have it silently skipped, so the loader refuses it.
++CHECKABLE_RECORDS = ("silver.finance_closed_revenue",)
++
++
+ @dataclass(frozen=True)
+ class Metric:
+     name: str
+@@ -37,6 +42,9 @@
+     unit: str = ""
+     type: str = "simple"          # simple | ratio
+     definition: str = ""
++    terms: tuple[str, ...] = ()   # regexes (lower-case text) for wording that names this metric
++    suppresses: tuple[str, ...] = ()        # less specific metrics this one overrides when both match
++    independent_record: str = ""            # table of an independent record that reconciles it (e.g. a finance close)
+ 
+ 
+ @dataclass(frozen=True)
+@@ -104,6 +112,8 @@
+         for mname, m in (ds.get("measures") or {}).items():
+             _require(m.get("agg") in {**_ADDITIVE, **_NON_ADDITIVE}, f"dataset {name}.{mname}: unknown agg")
+             _require(isinstance(m.get("expr"), str), f"dataset {name}.{mname}: expr required")
++            _require(m.get("cast", "bigint") in ("bigint", "double") and (m["agg"] in _ADDITIVE or "cast" not in m),
++                     f"dataset {name}.{mname}: cast must be bigint (default) or double, on an additive measure")
+ 
+     metrics: dict[str, Metric] = {}
+     for name, m in spec["metrics"].items():
+@@ -129,10 +139,26 @@
+                          f"metric {name}: dimensions not supported by {part} {m[part]}")
+         else:
+             _require(False, f"metric {name}: type must be simple|ratio")
++        terms = m.get("terms") or []
++        _require(isinstance(terms, list) and terms and all(isinstance(t, str) and t for t in terms),
++                 f"metric {name}: 'terms' (regexes for the wording that names it) is required")
++        for t in terms:
++            try:
++                re.compile(t)
++            except re.error as exc:
++                _require(False, f"metric {name}: term {t!r} is not a regex ({exc})")
++        sup = m.get("suppresses") or []
++        _require(isinstance(sup, list) and all(x in spec["metrics"] and x != name for x in sup),
++                 f"metric {name}: suppresses must name other metrics")
++        record = str(m.get("independent_record", ""))
++        _require(record in ("", *CHECKABLE_RECORDS),
++                 f"metric {name}: independent_record {record!r} has no reconciliation check "
++                 f"(supported: {list(CHECKABLE_RECORDS)}); leave it out and answers cap at T1")
+         metrics[name] = Metric(name=name, description=str(m["description"]).strip(), owner=str(m["owner"]),
+                                dimensions=mdims, caveats=[str(c) for c in m["caveats"]],
+                                label=str(m.get("label", name)), unit=str(m.get("unit", "")), type=mtype,
+-                               definition=str(m.get("definition", "")).strip())
++                               definition=str(m.get("definition", "")).strip(), terms=tuple(terms),
++                               suppresses=tuple(sup), independent_record=record)
+     return SemanticModel(metrics=metrics, digest=digest(spec), dimensions=dims,
+                          coverage_sql=coverage.strip(), spec=spec, path=str(path))
+ 
+@@ -261,7 +287,8 @@
+     agg = measure["agg"]
+     if agg in _ADDITIVE:
+         # Zero-fill: inside the coverage window "no rows" really means 0 (e.g. no churn that month).
+-        value = "CAST(" + _ADDITIVE[agg].format(x="measure") + " AS BIGINT)"
++        # integer money (fen) by default; a measure in a currency with cents declares cast: double
++        value = "CAST(" + _ADDITIVE[agg].format(x="measure") + f" AS {measure.get('cast', 'bigint').upper()})"
+         grid = ("spine g" if not dims else
+                 f"(SELECT s.month, {', '.join(f'd.{d}' for d in dims)} FROM spine s "
+                 f"CROSS JOIN (SELECT DISTINCT {', '.join(dims)} FROM m_{name}_facts) d) g")
+--- src/dsharness/tools/analytics.py
++++ src/dsharness/tools/analytics.py
+@@ -88,15 +88,25 @@
+                "pooled rate, growth between two months, a share of the total, a difference or ratio between two "
+                "groups, a top-N, fen to CNY), submit the result of that step with this metric_call and declare the "
+                "step in `derive`; the harness recomputes it.")
+-DERIVE_GUIDANCE = ("submit_answer.derive declares one arithmetic step on the governed rows: {months: sum|mean|pool|growth, "
+-                   "across: {op: share|difference|ratio|top, dimension, a, b, n}, keep: {dimension: values}, "
+-                   "unit: cny|percent}. Example: 'Q1 2026 net revenue in CNY' -> metric_call {metric: net_revenue_fen, "
++_DERIVE_SYNTAX = ("submit_answer.derive declares one arithmetic step on the governed rows: {months: sum|mean|pool|growth|cumsum, "
++                  "across: {op: share|difference|ratio|top, dimension (or 'month'), a, b, n}, keep: {dimension: values the "
++                  "question names}, unit: cny|percent}. ")
++_DERIVE_EXAMPLE = ("Example: 'Q1 2026 net revenue in CNY' -> metric_call {metric: net_revenue_fen, "
+                    "dimensions: [], months: [2026-01, 2026-03]} with derive {months: sum, unit: cny} and one row "
+-                   "{value: ...}. 'pool' recomputes a rate over several months from its counts; a distinct count "
+-                   "cannot be summed over months.")
++                   "{value: ...}. ")
++_DERIVE_TAIL = ("'pool' recomputes a rate over several months from its counts; 'cumsum' is a running total and keeps "
++                "one row per month; a distinct count cannot be summed over months.")
++DERIVE_GUIDANCE = _DERIVE_SYNTAX + _DERIVE_EXAMPLE + _DERIVE_TAIL
++
++
++def derive_guidance(model: SemanticModel) -> str:
++    """The derive guidance with the model's own worked example (`derive_example`), if it has one."""
++    ex = str(model.spec.get("derive_example") or "").strip()
++    return _DERIVE_SYNTAX + (ex + " " if ex else _DERIVE_EXAMPLE) + _DERIVE_TAIL
++
++
+ CERTIFICATE_SCHEMA = "https://dsharness.dev/schemas/answer-certificate/v1"
+ CERTIFICATES_LOG = CERTIFICATE_LOG                 # registry/answer_certificates.jsonl, append-only
+-INDEPENDENT_RECORDS = {"net_revenue_fen": "silver.finance_closed_revenue"}
+ CALLER_FIELDS = ("harness", "model", "cost")       # filled in by the caller; outside the certificate id
+ ALLOWED_USE = {
+     "T0": "reconciled to an independent record: may be used externally (board, regulator) with a named sign-off",
+@@ -111,23 +121,38 @@
+ 
+ 
+ @functools.cache
+-def semantic_model() -> SemanticModel:
+-    return load_semantic_model()
++def _model_at(path: str | None) -> SemanticModel:
++    return load_semantic_model(path)
+ 
+ 
+ @functools.cache
+-def catalog() -> Catalog:
+-    return load_catalog()
++def _catalog_at(path: str | None) -> Catalog:
++    return load_catalog(path)
++
++
++def semantic_model(ctx: ToolContext | None = None) -> SemanticModel:
++    """The workspace's own model (context/semantic_model.yaml) if it has one, else the built-in one."""
++    p = ctx.ws.context_file("semantic_model.yaml") if ctx is not None else None
++    return _model_at(str(p) if p else None)
++
++
++def catalog(ctx: ToolContext | None = None) -> Catalog:
++    p = ctx.ws.context_file("catalog.yaml") if ctx is not None else None
++    return _catalog_at(str(p) if p else None)
+ 
+ 
+ # =========================================================================== context tools
+ @governed_tool("list_metrics")
+ def list_metrics(ctx: ToolContext) -> dict:
+     """Governed metrics, the build's month coverage and worked examples (runtime-context split only)."""
+-    model = semantic_model()
++    model = semantic_model(ctx)
+     first, last = coverage(ctx.con, model)
+-    examples = [{"question": q["question"], "metric_call": q["metric_call"], "sql": q["sql"], "notes": q["notes"]}
+-                for q in load_verified_queries("context", model=model)]
++    # a workspace with its own model shows only its own worked examples (none if it has no verified_queries.yaml)
++    vq = ctx.ws.context_file("verified_queries.yaml")
++    own = ctx.ws.context_file("semantic_model.yaml") is not None
++    examples = [] if own and vq is None else [
++        {"question": q["question"], "metric_call": q["metric_call"], "sql": q["sql"], "notes": q["notes"]}
++        for q in load_verified_queries("context", path=vq, model=model)]
+     return {"metrics": _list_metrics(model), "coverage": {"first_month": first, "last_month": last},
+             "build_id": ctx.build_id, "cutoff": ctx.cutoff, "semantic_digest": model.digest,
+             "examples": examples,
+@@ -136,20 +161,20 @@
+                          "The metric_call must be the question asked: its metric, months containing the months "
+                          "it names, the values it names as filters, a dimension for every 'by X'. A call that "
+                          "contradicts the question is held for human review, however well it reconciles.",
+-                         DERIVE_GUIDANCE,
++                         derive_guidance(model),
+                          "run_sql results are uncertified; use them only when no governed metric fits."]}
+ 
+ 
+ @governed_tool("describe_metric")
+ def describe_metric(ctx: ToolContext, name: str) -> dict:
+-    return _describe_metric(semantic_model(), name)
++    return _describe_metric(semantic_model(ctx), name)
+ 
+ 
+ @governed_tool("query_metric")
+ def query_metric(ctx: ToolContext, metric: str, dimensions: list[str] | None = None,
+                  months: list[str] | None = None, filters: dict | None = None) -> dict:
+     """Governed metric rows (month, <dimensions...>, value). `months` is an inclusive pair."""
+-    model = semantic_model()
++    model = semantic_model(ctx)
+     call = normalize_metric_call({"metric": metric, "dimensions": dimensions or [], "months": months,
+                                   "filters": filters})
+     sql = compile_metric(model, **call)
+@@ -164,26 +189,26 @@
+ 
+ @governed_tool("search_catalog")
+ def search_catalog(ctx: ToolContext, query: str) -> dict:
+-    hits = _search(catalog(), query)
++    hits = _search(catalog(ctx), query)
+     return {"results": hits[:20], "n_results": len(hits),
+             "note": "certified = silver.* (governed); staging/uncertified tables carry known defects."}
+ 
+ 
+ @governed_tool("describe_table")
+ def describe_table(ctx: ToolContext, table: str) -> dict:
+-    return _describe_table(catalog(), table)
++    return _describe_table(catalog(ctx), table)
+ 
+ 
+ @governed_tool("run_sql")
+ def run_sql(ctx: ToolContext, sql: str) -> dict:
+     """Statically analysed, read-only SQL. Violations are refused; results are always uncertified."""
+     _check_sql_arg(sql)
+-    rep = analyze_sql(sql, catalog())
++    rep = analyze_sql(sql, catalog(ctx))
+     if not rep.ok:
+         raise ToolError("refused", "SQL refused by static analysis", violations=rep.violations,
+                         warnings=rep.warnings)
+     cols, rows, truncated = _execute(ctx, sql, ctx.max_rows)
+-    pii = [c for c in cols if c.lower() in catalog().pii_columns]
++    pii = [c for c in cols if c.lower() in catalog(ctx).pii_columns]
+     if pii:
+         raise ToolError("refused", f"result columns look like personal data: {pii}")
+     return {"columns": cols, "rows": [dict(zip(cols, r)) for r in rows], "n_rows": len(rows),
+@@ -247,7 +272,7 @@
+ 
+ def _validate_call_on_build(ctx: ToolContext, call: dict) -> str:
+     """Compile (validates names/values) and check the months lie in the build's coverage."""
+-    model = semantic_model()
++    model = semantic_model(ctx)
+     sql = compile_metric(model, **call)
+     first, last = coverage(ctx.con, model)
+     if call["months"] is not None and (call["months"][0] < first or call["months"][1] > last):
+@@ -265,27 +290,6 @@
+ 
+ 
+ # =========================================================================== governed-claim matching
+-# Phrases that name a governed quantity. Every metric in the semantic model must appear here
+-# (enforced by a test), so adding a metric without vocabulary fails loudly. Program metrics need the
+-# retention-program context somewhere in the text (lookahead), so a plain churn question keeps
+-# meaning customer churn.
+-_PROGRAM = r"(?=[\s\S]*\b(?:program(?:me)?s?|campaigns?|enrol\w*|treatment|control (?:arm|group)|arms?)\b)"
+-GOVERNED_TERMS: dict[str, str] = {
+-    "net_revenue_fen": r"\brevenues?\b|\brefund(?:s|ed)?\b",
+-    "addon_units": r"\badd[- ]?ons?\b",
+-    "active_subscribers_eom": r"\bactive (?:subscribers?|customers?|subscriptions?|users?)\b",
+-    "active_subscribers_bom": r"\bactive (?:subscribers?|customers?|subscriptions?|users?)\b",
+-    "churned_customers": r"\bchurn(?:ed|s|ing)?\b",
+-    "churn_rate": r"\bchurn(?:ed)?[- ]rates?\b|\brate of churn\b|\bchurn\b[^.?!;]*\brates?\b",
+-    "arpu_fen": r"\barpu\b|\baverage revenue per (?:user|subscriber|customer|account)\b",
+-    "avg_csat": r"\bcsat\b|\bcustomer satisfaction\b|\bsatisfaction scores?\b",
+-    "program_enrolled": r"\benrol\w*",
+-    "program_churned": _PROGRAM + r"[\s\S]*\bchurn(?:ed|s|ing)?\b",
+-    "program_churn_rate": _PROGRAM + r"[\s\S]*(?:\bchurn(?:ed)?[- ]rates?\b|\brate of churn\b|\bchurn\b[^.?!;]*\brates?\b)",
+-}
+-_SUPPRESSES = {"churn_rate": {"churned_customers"}, "arpu_fen": {"net_revenue_fen"},
+-               "program_churned": {"churned_customers", "program_enrolled"},
+-               "program_churn_rate": {"churn_rate", "churned_customers", "program_churned", "program_enrolled"}}
+ # Wording that changes what a number means; inference stops and asks for a declaration instead.
+ _QUALIFIERS = re.compile(
+     r"\b(gross|exclud\w*|excl|without|except|only|cumulative|growth|change[sd]?|share|percent\w*|median|"
+@@ -302,10 +306,9 @@
+ def match_governed_metrics(model: SemanticModel, text: str) -> list[str]:
+     """Governed metrics a question or claim talks about (most specific reading wins)."""
+     low = text.lower()
+-    hits = {m for m, pat in GOVERNED_TERMS.items() if m in model.metrics and re.search(pat, low)}
+-    for m, drop in _SUPPRESSES.items():
+-        if m in hits:
+-            hits -= drop
++    hits = {name for name, m in model.metrics.items() if any(re.search(t, low) for t in m.terms)}
++    for name in list(hits):
++        hits -= set(model.metrics[name].suppresses)
+     if {"active_subscribers_eom", "active_subscribers_bom"} <= hits:
+         if re.search(r"\b(start|beginning|begin|opening)\b", low):
+             hits.discard("active_subscribers_eom")
+@@ -388,8 +391,13 @@
+               r"randomi[sz]ed)\s+)?")
+ 
+ 
++def _flex(text: str) -> str:
++    """Spaces, hyphens and underscores are interchangeable: "non-UK", "non UK", "paid_search"."""
++    return re.sub(r"(?:\\ |\\-|_)+", "[ _-]+", re.escape(text))
++
++
+ def _value_pattern(v: str) -> str:
+-    return _VALUE_ALIASES.get(v) or (re.escape(v).replace("_", "[ _-]") + r"(?:e?s|e?d)?")
++    return _VALUE_ALIASES.get(v) or (_flex(v) + r"(?:e?s|e?d)?")
+ 
+ 
+ def _dim_pattern(d: str) -> str:
+@@ -405,13 +413,40 @@
+                                 r"(?:包括|包含|含|扣除|扣掉|减去|不含)[^，。；：？（）,.;:?()]*", re.I)
+ 
+ 
+-def _named_values(model: SemanticModel, d: str, question: str) -> set[str]:
+-    """Values of dimension d the question names, by canonical spelling or by an alias (Chinese has no
+-    word boundaries, so aliases match as substrings). Values inside a definition clause do not count."""
++def _ascii_bounded(pattern: str, text: str) -> str:
++    """Latin spellings must stand alone ("uk" is not in "duke"); Chinese has no word boundaries."""
++    return (r"(?<![a-z0-9])" if text[:1].isascii() and text[:1].isalnum() else "") + pattern + \
++        (r"(?![a-z0-9])" if text[-1:].isascii() and text[-1:].isalnum() else "")
++
++
++def _named_dimension_values(model: SemanticModel, question: str) -> tuple[dict[str, set[str]], list[set]]:
++    """Dimension values the question names, by canonical spelling or by an alias, read left to right
++    with the longest spelling winning at each position: "non-UK" never also names "UK", 非英国 never
++    英国. One spelling can name a value of several dimensions (market "UK" and country "United
++    Kingdom"); `hits` lists, per phrase found, every (dimension, value) it names. Values inside a
++    definition clause do not count."""
+     low = _DEFINITION_CLAUSE.sub(" ", question).lower()
+-    dim = model.dimensions[d]
+-    return {v for v in dim.values or () if re.search(rf"\b{_value_pattern(v)}\b", low)
+-            or any(a.lower() in low for a in dim.aliases.get(v, ()))}
++    spell: dict[str, tuple[set, set]] = {}               # normalised spelling -> ({patterns}, {(dim, value)})
++    for d, dim in model.dimensions.items():
++        for v in dim.values or ():
++            for text, canonical in ((v, True), *((a, False) for a in dim.aliases.get(v, ()))):
++                key = re.sub(r"[ _-]+", " ", text.lower())
++                pats, owners = spell.setdefault(key, (set(), set()))
++                pats.add(_value_pattern(text.lower()) if canonical else _flex(text.lower()))
++                owners.add((d, v))
++    named: dict[str, set[str]] = {}
++    hits: list[set] = []
++    if not spell:
++        return named, hits
++    order = sorted(spell, key=len, reverse=True)
++    rx = re.compile("|".join(f"(?P<s{i}>{_ascii_bounded('(?:' + '|'.join(sorted(spell[k][0], key=len, reverse=True)) + ')', k)})"
++                             for i, k in enumerate(order)))
++    for m in rx.finditer(low):
++        owners = spell[order[int(m.lastgroup[1:])]][1]
++        hits.append(owners)
++        for d, v in owners:
++            named.setdefault(d, set()).add(v)
++    return named, hits
+ 
+ 
+ def _asks_breakdown(model: SemanticModel, d: str, question: str) -> bool:
+@@ -446,8 +481,10 @@
+             out.append(f"the question names months {q_months[0]}..{q_months[1]} but metric_call declares "
+                        f"{dm[0]}..{dm[1]}")
+     filters = declared["filters"] or {}
++    all_named, hits = _named_dimension_values(model, question)
++    status: dict[str, tuple[bool, set, set]] = {}
+     for d in model.metrics[declared["metric"]].dimensions:
+-        named = _named_values(model, d, question)
++        named = all_named.get(d, set())
+         f = filters.get(d)
+         fv = set(f) if isinstance(f, list) else ({f} if f is not None else set())
+         if d in declared["dimensions"]:
+@@ -456,7 +493,15 @@
+             ok = not fv or (bool(named) and named <= fv)
+         else:
+             ok = fv == named
+-        if ok:
++        status[d] = (ok, named, fv)
++
++    def honoured_elsewhere(d: str) -> bool:
++        """Every phrase naming d also names a value of another dimension the call filters or breaks
++        down by, consistently ("UK" read as market UK or as country United Kingdom)."""
++        return all(any(d2 != d and status.get(d2, (False,))[0] and (d2 in declared["dimensions"] or filters.get(d2))
++                       for d2, _ in hit) for hit in hits if any(dd == d for dd, _ in hit))
++    for d, (ok, named, fv) in status.items():
++        if ok or (not fv and named and honoured_elsewhere(d)):
+             continue
+         if not named:
+             out.append(f"metric_call filters {d} to {sorted(fv)} but the question names no {d}")
+@@ -627,10 +672,17 @@
+ 
+ 
+ # =========================================================================== finance close
+-def finance_close_check(con: duckdb.DuckDBPyConnection, rows: list[dict], call: dict) -> dict:
+-    """Revenue totals vs the independent Finance close (closed months only)."""
++def finance_close_check(con: duckdb.DuckDBPyConnection, rows: list[dict], call: dict,
++                        model: SemanticModel | None = None) -> dict:
++    """Revenue totals vs the independent Finance close (closed months only). Applies only to a metric
++    whose semantic model names the finance close as its independent record."""
+     dims = call["dimensions"]
+-    if call["metric"] != "net_revenue_fen" or call["filters"] or not set(dims) <= {"region"}:
++    model = model or semantic_model()
++    if not any(m.independent_record for m in model.metrics.values()):
++        return {"outcome": "NOT_APPLICABLE", "reason": "no independent record exists for this data"}
++    m = model.metrics.get(call["metric"])
++    if (m is None or m.independent_record != "silver.finance_closed_revenue" or call["filters"]
++            or not set(dims) <= {"region"}):
+         return {"outcome": "NOT_APPLICABLE", "reason": "only unfiltered net revenue by month[/region] has an "
+                                                        "official record"}
+     a, b = call["months"] if call["months"] else ("0000-00", "9999-99")
+@@ -679,7 +731,7 @@
+                   metric_call: dict | None = None, claims: list[str] | tuple = (), derive: dict | None = None) -> dict:
+     """Verify an answer (static -> re-execution -> reconciliation), record evidence, return tier, trust
+     label, gate decision and the answer certificate."""
+-    model = semantic_model()
++    model = semantic_model(ctx)
+     if not isinstance(question, str) or not question.strip() or len(question) > MAX_QUESTION_CHARS:
+         raise ValueError(f"question must be a non-empty string of at most {MAX_QUESTION_CHARS} characters")
+     rows = _validate_answer_rows(answer_rows)
+@@ -708,10 +760,10 @@
+ 
+     # ---- 1. static analysis -------------------------------------------------------------
+     if sql is not None:
+-        rep = analyze_sql(sql, catalog())
++        rep = analyze_sql(sql, catalog(ctx))
+         static_source = "submitted_sql"
+     elif declared is not None:
+-        rep = analyze_sql(compile_metric(model, **declared), catalog())
++        rep = analyze_sql(compile_metric(model, **declared), catalog(ctx))
+         static_source = "compiled_metric_sql"
+     else:
+         rep = None
+@@ -804,7 +856,7 @@
+         recon["governed"] = _summ(governed)
+         if derived is not None:
+             recon["derive"] = derived
+-        finance = (finance_close_check(ctx.con, shaped, call)
++        finance = (finance_close_check(ctx.con, shaped, call, model)
+                    if governed["outcome"] == "PASS" and derived is None else None)
+         if finance is not None:
+             recon["finance_close"] = _summ(finance) if finance["outcome"] != "NOT_APPLICABLE" else finance
+@@ -921,7 +973,7 @@
+         m = model.metrics[call["metric"]]
+         metric = {"name": m.name, "type": m.type, "owner": m.owner,
+                   "definition_digest": metric_definition_digest(model, m.name),
+-                  "independent_record": INDEPENDENT_RECORDS.get(m.name)}
++                  "independent_record": m.independent_record or None}
+         caveats += m.caveats
+     question_months, _ = months_from_text(question)
+     reconcile_rec = next(r for r in records if r.check_id == "answer.reconcile")
+--- src/dsharness/tools/audit.py
++++ src/dsharness/tools/audit.py
+@@ -14,7 +14,7 @@
+ import inspect
+ from pathlib import Path
+ 
+-from ..common import append_jsonl, digest, read_jsonl, utcnow
++from ..common import append_jsonl, digest, read_jsonl, utcnow, values_digest
+ from ..workspace import Workspace
+ from .context import TOOL_REGISTRY, ToolContext, jsonable, scrub_pii
+ 
+@@ -36,7 +36,8 @@
+ def redact(value, key: str | None = None):
+     """Shrink one argument for the log while keeping a digest of what was elided."""
+     if key == "answer_rows" and isinstance(value, list):
+-        return {"n_rows": len(value), "sha256": digest(jsonable(value))}
++        rows = jsonable(value)
++        return {"n_rows": len(value), "sha256": digest(rows), "values_sha256": values_digest(rows)}
+     if key == "files" and isinstance(value, dict):
+         return {str(p): {"chars": len(c) if isinstance(c, str) else None, "sha256": digest(jsonable(c))}
+                 for p, c in list(value.items())[:_LIST_KEEP]}
+--- src/dsharness/tools/context.py
++++ src/dsharness/tools/context.py
+@@ -145,12 +145,13 @@
+ 
+ def make_context(ws: Workspace, cutoff: str, role: str, principal: str, task_id: str | None = None,
+                  **kwargs) -> ToolContext:
+-    """Controller-side: bind an agent to the READY default-pipeline build of `cutoff`.
++    """Controller-side: bind an agent to the READY build of `cutoff` made with the workspace's pipeline
++    (context/pipeline if the workspace has one, else the default pipeline).
+ 
+     Raises (never returns a degraded context) when the build is missing or FAILED."""
+     if role not in ROLE_TOOLS:
+         raise ValueError(f"unknown role {role!r}; known: {list(ROLE_TOOLS)}")
+-    build_id = latest_ready_build(ws, resolve_cutoff(cutoff))
++    build_id = latest_ready_build(ws, resolve_cutoff(cutoff), ws.context_file("pipeline"))
+     return ToolContext(ws=ws, build_id=build_id, role=role, principal=principal, task_id=task_id, **kwargs)
+ 
+ 
+--- src/dsharness/tools/derive.py
++++ src/dsharness/tools/derive.py
+@@ -8,15 +8,16 @@
+ the step, the harness recomputes it from the governed rows, and the submitted rows must equal the
+ harness's result.
+ 
+-    derive = {"months": "sum" | "mean" | "pool" | "growth" | None,
+-              "across": {"op": "share" | "difference" | "ratio" | "top", "dimension": d,
+-                         "a": v, "b": v, "n": k} | None,
++    derive = {"months": "sum" | "mean" | "pool" | "growth" | "cumsum" | None,
++              "across": {"op": "share" | "difference" | "ratio" | "top", "dimension": d | "month",
++                         "a": v, "b": v, "n": k} | None,      # share: optional a = the member reported
+               "keep": {dimension: value | [values]} | None,
+               "unit": "cny" | "percent" | None}
+ 
+-Steps run in that order: collapse the month column, combine rows across one dimension, keep the
++Steps run in that order: collapse (or accumulate) the month column, combine rows across one dimension, keep the
+ rows the question names (a share "from the south region" is computed against all regions, then
+-only south is reported), convert the unit. The fixed list is the whole language: anything else stays HOLD with a reason the agent can
++only south is reported), convert the unit. `across` may combine the months themselves (dimension
++"month", H v0.3 F16: the highest month, one month minus another) instead of a `months` roll-up. The fixed list is the whole language: anything else stays HOLD with a reason the agent can
+ read. Month roll-ups follow the metric's semantics, not the agent's choice:
+ 
+ - `sum` only for metrics whose monthly values add up (`month_rollup: sum` in the semantic model, or
+@@ -24,7 +25,9 @@
+ - `pool` only for ratio metrics: sum(numerator) / sum(denominator) over the months, the way the
+   caveats say a rate over several months must be computed;
+ - `mean` is the average of the monthly values (for "average monthly ..." questions);
+-- `growth` is (last month - first month) / first month of the declared months.
++- `growth` is (last month - first month) / first month of the declared months;
++- `cumsum` is the running total since the first declared month (H v0.3 F17); unlike the others it
++  keeps one row per month, and like `sum` only for metrics whose monthly values add up.
+ """
+ from __future__ import annotations
+ 
+@@ -34,7 +37,7 @@
+ 
+ import pandas as pd
+ 
+-MONTH_OPS = ("sum", "mean", "pool", "growth")
++MONTH_OPS = ("sum", "mean", "pool", "growth", "cumsum")
+ ACROSS_OPS = ("share", "difference", "ratio", "top")
+ UNITS = ("cny", "percent")
+ REL_TOL = 1e-9
+@@ -59,7 +62,7 @@
+     if months is not None:
+         if months not in MONTH_OPS:
+             raise DeriveError(f"derive.months must be one of {list(MONTH_OPS)}")
+-        if months == "sum" and month_rollup(spec, metric) != "sum":
++        if months in ("sum", "cumsum") and month_rollup(spec, metric) != "sum":
+             raise DeriveError(f"{metric} does not add up over months (a distinct count or a rate); use 'pool' for "
+                               f"a rate, 'mean' for an average of monthly values, or ask a human")
+         if months == "pool" and mtype != "ratio":
+@@ -69,11 +72,21 @@
+     if across is not None:
+         if not isinstance(across, dict) or across.get("op") not in ACROSS_OPS:
+             raise DeriveError(f"derive.across.op must be one of {list(ACROSS_OPS)}")
+-        d = across.get("dimension")
+-        if d not in call["dimensions"]:
+-            raise DeriveError(f"derive.across.dimension {d!r} must be one of metric_call.dimensions "
++        d, op = across.get("dimension"), across["op"]
++        if d == "month":                   # E1b: "which month was highest", "February 2026 minus February 2025"
++            if months is not None:
++                raise DeriveError("derive.across over 'month' combines the monthly rows itself; leave derive.months out")
++            if op == "share" and month_rollup(spec, metric) != "sum":
++                raise DeriveError(f"a month's share of the period total needs a metric that adds up over months; "
++                                  f"{metric} does not")
++            first, last = call.get("months") or (None, None)
++            for v in (across.get("a"), across.get("b")):
++                if v is not None and not (first and first <= str(v) <= last):
++                    raise DeriveError(f"derive.across.a/b {v!r} must be a month in metric_call.months "
++                                      f"{[first, last]} (YYYY-MM)")
++        elif d not in call["dimensions"]:
++            raise DeriveError(f"derive.across.dimension {d!r} must be 'month' or one of metric_call.dimensions "
+                               f"{call['dimensions']}")
+-        op = across["op"]
+         if op in ("difference", "ratio") and (across.get("a") is None or across.get("b") is None):
+             raise DeriveError(f"'{op}' needs a and b: two values of {d} (result = a {'-' if op == 'difference' else '/'} b)")
+         if op == "top" and not (isinstance(across.get("n"), int) and across["n"] >= 1):
+@@ -132,11 +145,16 @@
+             df = df[df["v0"] != 0]
+             df["value"] = (df["v1"].astype(float) - df["v0"].astype(float)) / df["v0"].astype(float)
+             df = df[[*rest, "value"]]
++        elif op == "cumsum":       # running total; the month column stays
++            df = df.sort_values("month")
++            df["value"] = df.groupby(rest, dropna=False)["value"].cumsum() if rest else df["value"].cumsum()
++            df = df[[*keys, "value"]]
+         else:
+             df = (_total(df, rest) if op == "sum" else
+                   (df.groupby(rest, as_index=False, dropna=False)["value"].mean() if rest
+                    else pd.DataFrame({"value": [df["value"].astype(float).mean()]})))
+-        keys = rest
++        if op != "cumsum":
++            keys = rest
+     ac = d["across"]
+     if ac is not None:
+         dim = ac["dimension"]
+@@ -144,6 +162,10 @@
+         if ac["op"] == "share":
+             tot = df.groupby(other, dropna=False)["value"].transform("sum") if other else df["value"].sum()
+             df = df.assign(value=df["value"].astype(float) / tot)
++            if ac.get("a") is not None:    # "the west region's share": a names the member reported (as keep)
++                df = df[df[dim].astype(str) == str(ac["a"])]
++                if df.empty:
++                    raise DeriveError(f"no governed rows for {dim} = {ac['a']!r}")
+         elif ac["op"] == "top":
+             df = (df.sort_values([*other, "value"], ascending=[True] * len(other) + [False])
+                   .groupby(other, dropna=False, sort=False).head(ac["n"]) if other
+@@ -153,6 +175,11 @@
+             b = df[df[dim].astype(str) == str(ac["b"])].drop(columns=dim).rename(columns={"value": "vb"})
+             if a.empty or b.empty:
+                 raise DeriveError(f"no governed rows for {dim} = {ac['a'] if a.empty else ac['b']!r}")
++            if other:                      # a group with only one side would silently drop out of the merge
++                ka, kb = (set(map(tuple, x[other].astype(str).values)) for x in (a, b))
++                if ka != kb:
++                    raise DeriveError(f"{dim} = {ac['a']!r} and {ac['b']!r} do not cover the same {other}: "
++                                      f"{sorted(ka ^ kb)[:4]} have only one of them; narrow metric_call.filters")
+             df = a.merge(b, on=other) if other else pd.concat([a.reset_index(drop=True), b.reset_index(drop=True)], axis=1)
+             va, vb = df["va"].astype(float), df["vb"].astype(float)
+             df = df.assign(value=va - vb if ac["op"] == "difference" else va / vb)[[*other, "value"]]
+@@ -204,7 +231,9 @@
+     keys = [k for k in keys if k in sub_cols or expected[k].nunique(dropna=False) > 1]
+     missing = [k for k in keys if k not in sub_cols]
+     if missing:
+-        return {"outcome": "FAIL", "reason": f"the derived answer needs key columns {missing}"}
++        hint = "" if "month" in missing else (f" (or, if the question names one {missing[0]}, declare derive.keep = "
++                                              f"{{{missing[0]!r}: [the value it names]}} so only that row is derived)")
++        return {"outcome": "FAIL", "reason": f"the derived answer needs key columns {missing}{hint}"}
+     extra = sorted(sub_cols - {*keys, *expected.columns, *ignore})
+     if extra:
+         return {"outcome": "FAIL", "reason": f"unexpected columns {extra}: the derived rows are {[*keys, 'value']}"}
+@@ -216,8 +245,15 @@
+             return {"outcome": "FAIL", "reason": f"several rows for {dict(zip(keys, k)) or 'the single value'}"}
+         got[k] = r.get("value")
+     if set(got) != set(exp):
+-        return {"outcome": "FAIL", "reason": f"rows {sorted(got)[:4]} != derived rows {sorted(exp)[:4]}",
+-                "n_expected": len(exp), "n_answer": len(got)}
++        reason = f"rows {sorted(got)[:4]} != derived rows {sorted(exp)[:4]}"
++        if got and set(got) < set(exp):    # E1b: "the west region's share" answered with the west row only
++            named = [r for r in expected.to_dict("records") if key(r) in got]
++            pick = {k: sorted({str(r[k]) for r in named}) for k in keys
++                    if k != "month" and expected[k].nunique(dropna=False) > 1}
++            if pick:
++                reason += (f"; the answer reports only some of the derived rows: if the question names only these, "
++                           f"declare derive.keep = {pick} and submit again")
++        return {"outcome": "FAIL", "reason": reason, "n_expected": len(exp), "n_answer": len(got)}
+     bad = [{"key": dict(zip(keys, k)), "answer": got[k], "derived": exp[k]} for k in exp
+            if not value_matches(got[k], float(exp[k]))]
+     if bad:
+--- src/dsharness/tools/ds.py
++++ src/dsharness/tools/ds.py
+@@ -123,12 +123,12 @@
+     feature = FeatureDef(name, sql, description.strip(), "proposed")     # FeatureError is a ValueError
+     as_of = pit_pairs()[0][0]
+     wrapped = f"WITH population AS ({population_sql(as_of)})\nSELECT * FROM ({render_sql(feature.sql, as_of)}) AS f"
+-    rep = analyze_sql(wrapped, catalog())
++    rep = analyze_sql(wrapped, catalog(ctx))
+     if not rep.ok:
+         raise ToolError("refused", "feature SQL refused by static analysis", violations=rep.violations)
+     if rep.tier != "certified":
+         raise ToolError("refused", f"features may only read certified silver.* tables; this one reads {rep.tables}")
+-    res = check_feature(ctx.ws, feature, catalog())
++    res = check_feature(ctx.ws, feature, catalog(ctx))
+     subject = feature_subject(feature)
+     keep = ("as_of", "outcome", "n_compared", "n_diff", "examples", "reason", "early_build", "late_build")
+     travel = [{k: t.get(k) for k in keep} for t in res["time_travel"]]
+--- src/dsharness/tools/shape.py
++++ src/dsharness/tools/shape.py
+@@ -101,13 +101,13 @@
+     months the question names (first, last) if they could be read."""
+     out: list[str] = []
+     d = derive or {"months": None, "across": None, "unit": None}
+-    collapsed = d["months"] is not None
++    collapsed = d["months"] not in (None, "cumsum") or (d.get("across") or {}).get("dimension") == "month"
+     several = q_months is not None and q_months[0] != q_months[1]
+     if several and not asks_per_month(question) and not collapsed and "month" not in (call.get("dimensions") or []):
+         # one value (per group) over several months was asked; monthly rows are not that answer
+         out.append(f"the question asks for one value over {q_months[0]}..{q_months[1]}, but the answer has one row "
+                    f"per month; declare derive.months (sum, mean, pool or growth) and submit the derived rows")
+-    if collapsed and asks_per_month(question):
++    if d["months"] not in (None, "cumsum") and asks_per_month(question):
+         out.append("the question asks for one row per month, but derive.months collapses the months")
+     if d["months"] in ("sum", "pool") and asks_monthly_mean(question):
+         out.append(f"the question asks for an average per month, but derive.months is {d['months']!r}; use 'mean'")
+--- src/dsharness/workspace.py
++++ src/dsharness/workspace.py
+@@ -46,6 +46,16 @@
+     def runs(self) -> Path:         # zone: per-run scratch outputs (candidate-writable)
+         return self.root / "runs"
+ 
++    @property
++    def context(self) -> Path:      # zone: reviewed definitions of this data (owners write; optional)
++        return self.root / "context"
++
++    def context_file(self, name: str) -> Path | None:
++        """`context/<name>` when this workspace defines its own (semantic_model.yaml, catalog.yaml,
++        pipeline); None means the built-in definitions of the reference scenario apply."""
++        p = self.context / name
++        return p if p.exists() else None
++
+     def source_dir(self, cutoff: str) -> Path:
+         return self.sources / cutoff
+ 
+--- tests/test_answer_v03.py
++++ tests/test_answer_v03.py
+@@ -0,0 +1,80 @@
++"""H v0.3 regression tests built from E1b arm-H failures (docs/experiments/H_v0.3_PLAN.md, F15 / F16).
++
++As in test_answer_v02, the expected values are computed here from the governed rows with plain pandas,
++independently of `tools/derive.py`."""
++from __future__ import annotations
++
++import pytest
++
++from dsharness import tools as T
++
++from test_answer_v02 import private_ws, rows, verdict
++
++
++@pytest.fixture(scope="module")
++def analyst(small_ws, tmp_path_factory):
++    ctx = T.make_context(private_ws(small_ws, tmp_path_factory.mktemp("v03") / "ws"), "score", "analyst",
++                         "agent:analyst-v03")
++    yield ctx
++    ctx.close()
++
++
++def test_highest_month_is_one_row(analyst):
++    """E1b C-H20: 'which month had the highest churn rate' was answered with all twelve months
++    (VERIFIED, delivered, wrong) because across.dimension = 'month' was refused."""
++    q = ("Which month from January to March 2026 had the highest monthly churn rate, and what was that rate? "
++         "Give it as a share between 0 and 1.")
++    df, call = rows(analyst, "churn_rate", [], ["2026-01", "2026-03"])
++    top = df.sort_values("value", ascending=False).iloc[0]
++    d = {"across": {"op": "top", "dimension": "month", "n": 1}}
++    r = T.submit_answer(analyst, q, [{"month": top["month"], "value": float(top["value"])}], metric_call=call, derive=d)
++    assert verdict(r) == ("VERIFIED", "ALLOW"), (r["reasons"], r["warnings"])
++    low = df.sort_values("value").iloc[0]
++    r = T.submit_answer(analyst, q, [{"month": low["month"], "value": float(low["value"])}], metric_call=call, derive=d)
++    assert verdict(r) == ("FLAGGED", "REJECT")
++
++
++def test_one_month_minus_another(analyst):
++    """E1b C-H31: a difference between two months was held: the rows had no month column and the
++    claim spanned several months."""
++    q = "How much higher was net revenue in March 2026 than in January 2026, in fen?"
++    df, call = rows(analyst, "net_revenue_fen", [], ["2026-01", "2026-03"])
++    by = df.set_index("month")["value"]
++    d = {"across": {"op": "difference", "dimension": "month", "a": "2026-03", "b": "2026-01"}}
++    r = T.submit_answer(analyst, q, [{"value": float(by["2026-03"] - by["2026-01"])}], metric_call=call, derive=d)
++    assert verdict(r) == ("VERIFIED", "ALLOW"), (r["reasons"], r["warnings"])
++
++
++def test_share_of_one_region_names_keep(analyst):
++    """E1b C-H15 / C-L28: 'the west region's share' answered with the west row was told the derived
++    rows are every region; the agents then submitted all four (delivered, wrong). Now the reason names
++    derive.keep, and with it the single value verifies."""
++    q = "What share of total net revenue in January 2026 came from the west region? Give a share between 0 and 1."
++    df, call = rows(analyst, "net_revenue_fen", ["region"], ["2026-01", "2026-01"])
++    share = float(df.set_index("region")["value"]["west"] / df["value"].sum())
++    d = {"across": {"op": "share", "dimension": "region"}}
++    r = T.submit_answer(analyst, q, [{"region": "west", "value": share}], metric_call=call, derive=d)
++    assert r["tier"] == "FLAGGED"
++    assert "derive.keep = {'region': ['west']}" in r["checks"]["reconcile"]["governed"]["reason"]
++    r = T.submit_answer(analyst, q, [{"value": share}], metric_call=call, derive={**d, "keep": {"region": "west"}})
++    assert verdict(r) == ("VERIFIED", "ALLOW"), (r["reasons"], r["warnings"])
++    # the way the C-H15 agent wrote it: share with a = west
++    r = T.submit_answer(analyst, q, [{"value": share}], metric_call=call,
++                        derive={"across": {"op": "share", "dimension": "region", "a": "west"}})
++    assert verdict(r) == ("VERIFIED", "ALLOW"), (r["reasons"], r["warnings"])
++
++
++def test_running_total_by_month(analyst):
++    """E1b C-H32: 'cumulative net revenue at the end of each month' was held in all six attempts: derive had
++    no running total (one agent tried months = 'cumsum' and was refused), so the right rows were FLAGGED."""
++    q = ("What was the cumulative net revenue, in CNY, at the end of each month from January through March 2026? "
++         "Give one row per month with the running total since January.")
++    df, call = rows(analyst, "net_revenue_fen", [], ["2026-01", "2026-03"])
++    df = df.sort_values("month")
++    d = {"months": "cumsum", "unit": "cny"}
++    run = [{"month": m, "value": float(v) / 100} for m, v in zip(df["month"], df["value"].astype(float).cumsum())]
++    r = T.submit_answer(analyst, q, run, metric_call=call, derive=d)
++    assert verdict(r) == ("VERIFIED", "ALLOW"), (r["reasons"], r["warnings"])
++    monthly = [{"month": m, "value": float(v) / 100} for m, v in zip(df["month"], df["value"])]
++    r = T.submit_answer(analyst, q, monthly, metric_call=call, derive=d)
++    assert verdict(r) == ("FLAGGED", "REJECT")
+--- tests/test_bench.py
++++ tests/test_bench.py
+@@ -317,6 +317,31 @@
+     assert s["cost_per_correct_usd"] == pytest.approx(0.4)
+ 
+ 
++
++def test_census_matches_final_rows_to_a_submission_by_value(small_ws, tmp_path):
++    """E1b: 7 verified answers counted as undelivered because the final JSON retyped a number (611761
++    submitted, 611761.0 reported; a 17th digit dropped). H v0.3 S2 matches the rows as numbers."""
++    from dsharness.tools.audit import redact
++    ws = private_workspace(small_ws, tmp_path / "ws")
++    principal = "agent:live-match"
++    for rows in ([{"region": "east", "value": 624763.2}, {"region": "north", "value": 611761}],
++                 [{"month": "2025-12", "value": 3.7341393956685813}]):
++        append_jsonl(ws.registry / "audit.jsonl", {
++            "principal": principal, "tool": "submit_answer", "outcome": "ok",
++            "args": {"answer_rows": redact(rows, "answer_rows")},
++            "result_summary": {"tier": "VERIFIED", "gate": "ALLOW"}})
++    h = L.harness_from_audit(ws, principal, [{"region": "north", "value": 611761.0}, {"region": "east", "value": 624763.2}])
++    assert h["delivered"] and h["final_rows_match"] == "values"
++    h = L.harness_from_audit(ws, principal, [{"month": "2025-12", "value": 3.734139395668581}])
++    assert h["delivered"] and h["final_rows_match"] == "values"
++    h = L.harness_from_audit(ws, principal, [{"month": "2025-12", "value": 3.7341393956685813}])
++    assert h["delivered"] and h["final_rows_match"] == "exact"
++    h = L.harness_from_audit(ws, principal, [{"region": "east", "value": 624763.2}, {"region": "north", "value": 611762}])
++    assert not h["delivered"] and h["final_rows_match"] is None and h["reason"]
++    from dsharness.common import values_digest
++    assert values_digest([{"v": -0.0}]) == values_digest([{"v": 0}])
++    assert values_digest([{"v": 10 ** 400}]) != values_digest([{"v": 0}])      # no OverflowError
++
+ def test_live_runner_skips_missing_or_logged_out_cli(small_ws, tmp_path):
+     ws = private_workspace(small_ws, tmp_path / "ws")
+     missing = L.run_live(ws, L.LiveConfig(cli="definitely-not-an-agent-cli-xyz", tasks=("A2",)))
+--- tests/test_census.py
++++ tests/test_census.py
+@@ -47,3 +47,42 @@
+         Census(None, tmp_path, [], [], ["N", "H1"], 3)
+     with pytest.raises(CensusError, match="h1_src"):
+         Census(None, tmp_path, [], [], ["H1"], 3, h1_src=tmp_path)
++
++
++def test_subscription_world_prompts_are_unchanged():
++    """The E1 / E1b agent prompts, rendered through the World config, are byte-identical (sha256 pinned)."""
++    import hashlib
++
++    from dsharness.bench import census as C
++    w = C.SUBSCRIPTION
++    n = C.PROMPT_N.format(company=w.company, key_example=w.key_example, question="QQ")
++    h = C.PROMPT_H.format(company=w.company, server=C.SERVER, question="QQ")
++    assert hashlib.sha256(n.encode()).hexdigest() == "04716dfa130e19e6402e5d6213e75e78e3ec980f23bb214e57fda459e4abb7be"
++    assert hashlib.sha256(h.encode()).hexdigest() == "7d265a541e70fdccd48a9539bec45fe83bdb85037d68ac132cb38f44d4d799b2"
++
++
++def test_key_spellings_follow_the_world():
++    from dsharness.bench import census as C
++    q = C.Question("q", "C", "x", "en", "?", ("market",), "other", ("2025-01", "2025-01"))
++    truth = {"uk": 10.0, "non_uk": 5.0}
++    rows = [{"market": "United Kingdom", "value": 10}, {"market": "Non-UK", "value": 5}]
++    assert not C.grade_values(q, rows, truth)["correct"]                    # subscription spellings
++    retail = {**C.KEY_ALIASES, "united_kingdom": "uk", "英国": "uk"}
++    assert C.grade_values(q, rows, truth, retail)["correct"]
++    assert C.grade_values(q, [{"market": "英国", "value": 10}, {"market": "non-uk", "value": 5}], truth, retail)["correct"]
++
++
++def test_arm_n_warehouse_keeps_the_raw_export_readable(small_ws, tmp_path):
++    """bronze_safe.* are views over bronze.*; the copy for arm N drops bronze, so the views must become tables."""
++    import duckdb
++
++    from dsharness.bench.census import prepare_warehouse_copy
++    path = prepare_warehouse_copy(small_ws, tmp_path / "wh.duckdb")
++    con = duckdb.connect(str(path), read_only=True)
++    try:
++        schemas = {s for (s,) in con.execute("SELECT DISTINCT schema_name FROM duckdb_tables()").fetchall()}
++        assert "bronze" not in schemas and "bronze_safe" in schemas
++        assert con.execute("SELECT count(*) FROM duckdb_views() WHERE NOT internal").fetchone()[0] == 0
++        assert con.execute("SELECT count(*) FROM bronze_safe.billing_invoices").fetchone()[0] > 0
++    finally:
++        con.close()
+--- tests/test_derive.py
++++ tests/test_derive.py
+@@ -101,7 +101,12 @@
+     ({"across": {"op": "share", "dimension": "region"}}, "rate", "additive"),
+     ({"unit": "cny"}, "active", "fen to CNY"),
+     ({"across": {"op": "difference", "dimension": "region", "a": "north"}}, "rev", "needs a and b"),
+-    ({"across": {"op": "share", "dimension": "plan"}}, "rev", "must be one of metric_call.dimensions"),
++    ({"across": {"op": "share", "dimension": "plan"}}, "rev", "must be 'month' or one of metric_call.dimensions"),
++    ({"months": "sum", "across": {"op": "top", "dimension": "month", "n": 1}}, "rev", "leave derive.months out"),
++    ({"across": {"op": "share", "dimension": "month"}}, "active", "adds up over months"),
++    ({"across": {"op": "difference", "dimension": "month", "a": "2026-03", "b": "2025-12"}}, "rev",
++     "must be a month in metric_call.months"),
++    ({"months": "cumsum"}, "active", "does not add up"),
+     ({"months": "median"}, "rev", "must be one of"),
+     ({"sql": "select 1"}, "rev", "keys months, across, keep, unit"),
+ ])
+@@ -131,3 +136,62 @@
+     assert compare_derived([{"region": "north", "value": 0.625}], df, keys)["outcome"] == "FAIL"
+     with pytest.raises(DeriveError, match="derive.keep"):
+         normalize_derive({"keep": {"plan": "pro"}}, "rev", SPEC, call())
++
++
++def test_keep_hint_when_the_answer_is_one_of_the_derived_rows():
++    """E1b C-H15 / C-L28: 'the west region's share' answered with the west row; v0.2 replied
++    "rows [west] != derived rows [east, north, ...]" and the agents then submitted every region (wrong)."""
++    df, keys = derive({"months": "sum", "across": {"op": "share", "dimension": "region"}})
++    res = compare_derived([{"region": "south", "value": 0.625}], df, keys)
++    assert res["outcome"] == "FAIL" and "derive.keep = {'region': ['south']}" in res["reason"]
++    res = compare_derived([{"value": 0.625}], df, keys)                         # no region column at all
++    assert res["outcome"] == "FAIL" and "derive.keep" in res["reason"]
++    full = [{"region": "north", "value": 0.375}, {"region": "south", "value": 0.625}]
++    assert "derive.keep" not in compare_derived(full[:1] + [{"region": "west", "value": 0.1}], df, keys)["reason"]
++
++
++def test_across_months_highest_month_and_month_difference():
++    """E1b C-H20 ('which month in 2025 had the highest churn rate') and C-H31 (February 2026 minus
++    February 2025): agents declared across.dimension = 'month', which v0.2 refused."""
++    total = REV.groupby("month", as_index=False)["value"].sum()
++    df, keys = derive({"across": {"op": "top", "dimension": "month", "n": 1}}, dims=(), rows=total)
++    assert df.to_dict("records") == [{"month": "2026-03", "value": 700}]
++    assert compare_derived([{"value": 700}], df, keys)["outcome"] == "PASS"             # month may be left out
++    assert compare_derived([{"month": "2026-03", "value": 700}], df, keys)["outcome"] == "PASS"
++    assert compare_derived([{"month": "2026-02", "value": 700}], df, keys)["outcome"] == "FAIL"
++    df, keys = derive({"across": {"op": "difference", "dimension": "month", "a": "2026-03", "b": "2026-01"}})
++    assert keys == ["region"] and df.to_dict("records") == [{"region": "north", "value": 200},
++                                                           {"region": "south", "value": 100}]
++
++
++def test_share_with_a_reports_that_member():
++    """E1b C-H15: the agent declared across {op: share, dimension: region, a: west}; v0.2 ignored a."""
++    df, keys = derive({"months": "sum", "across": {"op": "share", "dimension": "region", "a": "south"}})
++    assert df.to_dict("records") == [{"region": "south", "value": pytest.approx(1000 / 1600)}]
++    assert compare_derived([{"value": 0.625}], df, keys)["outcome"] == "PASS"
++    total = REV.groupby("month", as_index=False)["value"].sum()
++    df, keys = derive({"across": {"op": "share", "dimension": "month", "a": "2026-03"}}, dims=(), rows=total)
++    assert df.to_dict("records") == [{"month": "2026-03", "value": pytest.approx(700 / 1600)}]
++
++
++def test_difference_refuses_groups_with_one_side():
++    rows = REV[~((REV["region"] == "south") & (REV["month"] == "2026-01"))]
++    with pytest.raises(DeriveError, match="do not cover the same"):
++        derive({"across": {"op": "difference", "dimension": "month", "a": "2026-03", "b": "2026-01"}}, rows=rows)
++
++
++def test_running_total_keeps_one_row_per_month():
++    """E1b C-H32 (H v0.3 F17): cumulative revenue at the end of each month, per region and in total."""
++    df, keys = derive({"months": "cumsum", "unit": "cny"})
++    assert keys == ["month", "region"]
++    got = {(m, r): v for m, r, v in zip(df["month"], df["region"], df["value"])}
++    assert got == pytest.approx({("2026-01", "north"): 1.0, ("2026-02", "north"): 3.0, ("2026-03", "north"): 6.0,
++                                 ("2026-01", "south"): 3.0, ("2026-02", "south"): 6.0, ("2026-03", "south"): 10.0})
++    total = REV.groupby("month", as_index=False)["value"].sum()
++    df, keys = derive({"months": "cumsum"}, dims=(), rows=total)
++    assert keys == ["month"] and df["value"].tolist() == [400, 900, 1600]
++    assert compare_derived([{"month": m, "value": v} for m, v in (("2026-01", 400), ("2026-02", 900), ("2026-03", 1600))],
++                           df, keys)["outcome"] == "PASS"
++    # the monthly values themselves are not the running total
++    assert compare_derived([{"month": m, "value": v} for m, v in (("2026-01", 400), ("2026-02", 500), ("2026-03", 700))],
++                           df, keys)["outcome"] == "FAIL"
+--- tests/test_tools.py
++++ tests/test_tools.py
+@@ -15,7 +15,7 @@
+ import pytest
+ 
+ from dsharness import cli, tools as T
+-from dsharness.common import digest, file_digest, read_jsonl
++from dsharness.common import digest, file_digest, read_jsonl, values_digest
+ from dsharness.context.semantic import load_semantic_model, load_verified_queries, metric_definition_digest
+ from dsharness.evidence import EvidenceStore, load_policy
+ from dsharness.lake.build import DEFAULT_PIPELINE
+@@ -520,7 +520,7 @@
+ 
+ def test_governed_terms_cover_every_metric_and_inference_is_conservative():
+     model = load_semantic_model()
+-    assert set(A.GOVERNED_TERMS) == set(model.metrics)
++    assert all(m.terms for m in model.metrics.values())       # the loader requires them; vocabulary lives in the model
+     assert A.match_governed_metrics(model, "What was the churn rate in April 2026?") == ["churn_rate"]
+     assert A.match_governed_metrics(model, "What was ARPU in April 2026?") == ["arpu_fen"]
+     assert A.match_governed_metrics(model, "active subscribers at the end of April") == ["active_subscribers_eom"]
+@@ -549,7 +549,7 @@
+     rows, call = governed_rows(analyst, "net_revenue_fen", [], ["2026-01", "2026-02"])
+     T.submit_answer(analyst, "What was net revenue in Jan and Feb 2026?", rows, metric_call=call)
+     line = [x for x in read_jsonl(ws.registry / "audit.jsonl") if x["tool"] == "submit_answer"][-1]
+-    assert line["args"]["answer_rows"] == {"n_rows": 2, "sha256": digest(rows)}
++    assert line["args"]["answer_rows"] == {"n_rows": 2, "sha256": digest(rows), "values_sha256": values_digest(rows)}
+     assert line["args"]["question"].startswith("What was net revenue")
+     assert len(line["args_digest"]) == 64 and line["outcome"] == "ok"
+     assert line["result_summary"]["tier"] == "VERIFIED" and line["result_summary"]["gate"] == "ALLOW"
+--- tests/test_world_context.py
++++ tests/test_world_context.py
+@@ -0,0 +1,154 @@
++"""A workspace can bring its own reviewed definitions (context/semantic_model.yaml, catalog.yaml, pipeline);
++without them the built-in reference scenario applies unchanged (harness v0.3, docs/experiments/E3a/DESIGN.md)."""
++from __future__ import annotations
++
++from pathlib import Path
++
++import pytest
++import yaml
++
++from dsharness import tools as T
++from dsharness.bench.run import private_workspace
++from dsharness.context.semantic import DEFAULT_SEMANTIC_MODEL, compile_metric, load_semantic_model
++from dsharness.tools import analytics as A
++
++
++def own_model(tmp: Path) -> Path:
++    """The built-in model plus one metric with its own vocabulary."""
++    spec = yaml.safe_load(DEFAULT_SEMANTIC_MODEL.read_text(encoding="utf-8"))
++    spec["metrics"]["gross_charges_fen"] = {
++        "type": "simple", "terms": [r"\bgross charges?\b"], "label": "Gross charges (fen)", "unit": "fen",
++        "owner": "test", "description": "Charges before add-ons and refunds.", "dataset": "invoices",
++        "measure": "amount_fen", "filter": "b.invoice_type = 'charge'", "dimensions": ["region"],
++        "caveats": ["test metric"]}
++    p = tmp / "semantic_model.yaml"
++    p.write_text(yaml.safe_dump(spec, allow_unicode=True, sort_keys=False), encoding="utf-8")
++    return p
++
++
++@pytest.fixture(scope="module")
++def ws_own(small_ws, tmp_path_factory):
++    base = tmp_path_factory.mktemp("own")
++    ctx_dir = base / "context_src"
++    ctx_dir.mkdir()
++    own_model(ctx_dir)
++    ws = private_workspace(small_ws, base / "ws")
++    ws.context.mkdir()
++    (ws.context / "semantic_model.yaml").write_bytes((ctx_dir / "semantic_model.yaml").read_bytes())
++    return ws
++
++
++def test_workspace_model_is_served_and_default_is_untouched(ws_own, small_ws):
++    ctx = T.make_context(ws_own, "score", "analyst", "agent:own")
++    try:
++        names = {m["name"] for m in T.list_metrics(ctx)["metrics"]}
++        assert "gross_charges_fen" in names
++        assert A.match_governed_metrics(A.semantic_model(ctx), "What were gross charges in March 2026?") == \
++            ["gross_charges_fen"]
++        q = T.query_metric(ctx, "gross_charges_fen", [], ["2026-03", "2026-03"])
++        assert q["rows"] and "error" not in q
++    finally:
++        ctx.close()
++    base = T.make_context(small_ws, "score", "analyst", "agent:base")
++    try:
++        assert "gross_charges_fen" not in {m["name"] for m in T.list_metrics(base)["metrics"]}
++    finally:
++        base.close()
++
++
++def test_private_workspace_shares_the_context(ws_own, tmp_path):
++    child = private_workspace(ws_own, tmp_path / "child")
++    assert child.context_file("semantic_model.yaml") is not None
++    assert child.context_file("catalog.yaml") is None and child.context_file("pipeline") is None
++
++
++def test_a_metric_without_vocabulary_is_refused(tmp_path):
++    spec = yaml.safe_load(DEFAULT_SEMANTIC_MODEL.read_text(encoding="utf-8"))
++    del spec["metrics"]["avg_csat"]["terms"]
++    p = tmp_path / "m.yaml"
++    p.write_text(yaml.safe_dump(spec, sort_keys=False), encoding="utf-8")
++    with pytest.raises(ValueError, match="terms"):
++        load_semantic_model(p)
++    spec["metrics"]["avg_csat"]["terms"] = ["(unclosed"]
++    p.write_text(yaml.safe_dump(spec, sort_keys=False), encoding="utf-8")
++    with pytest.raises(ValueError, match="not a regex"):
++        load_semantic_model(p)
++
++
++def test_independent_record_comes_from_the_model():
++    model = load_semantic_model()
++    assert model.metrics["net_revenue_fen"].independent_record == "silver.finance_closed_revenue"
++    assert [n for n, m in model.metrics.items() if m.independent_record] == ["net_revenue_fen"]
++
++
++def test_an_independent_record_without_a_check_is_refused(tmp_path):
++    spec = yaml.safe_load(DEFAULT_SEMANTIC_MODEL.read_text(encoding="utf-8"))
++    spec["metrics"]["avg_csat"]["independent_record"] = "silver.csat_survey_close"
++    p = tmp_path / "m.yaml"
++    p.write_text(yaml.safe_dump(spec, sort_keys=False), encoding="utf-8")
++    with pytest.raises(ValueError, match="has no reconciliation check"):
++        load_semantic_model(p)
++
++
++def test_money_with_cents_is_not_cast_to_integers(tmp_path):
++    """Onboarding E3a found additive sums always cast to BIGINT (fen); GBP lost its pence."""
++    from dsharness.context.semantic import compile_metric
++    spec = yaml.safe_load(DEFAULT_SEMANTIC_MODEL.read_text(encoding="utf-8"))
++    assert "AS BIGINT" in compile_metric(load_semantic_model(), "net_revenue_fen", [], ("2026-01", "2026-01"), None)
++    spec["datasets"]["invoices"]["measures"]["amount_fen"]["cast"] = "double"
++    p = tmp_path / "m.yaml"
++    p.write_text(yaml.safe_dump(spec, sort_keys=False), encoding="utf-8")
++    sql = compile_metric(load_semantic_model(p), "net_revenue_fen", [], ("2026-01", "2026-01"), None)
++    assert "AS DOUBLE" in sql and "AS BIGINT" not in sql
++    spec["datasets"]["invoices"]["measures"]["amount_fen"]["cast"] = "decimal"
++    p.write_text(yaml.safe_dump(spec, sort_keys=False), encoding="utf-8")
++    with pytest.raises(ValueError, match="cast"):
++        load_semantic_model(p)
++
++
++def test_derive_example_follows_the_model(ws_own):
++    assert A.derive_guidance(load_semantic_model()) == A.DERIVE_GUIDANCE
++    spec = yaml.safe_load((ws_own.context / "semantic_model.yaml").read_text(encoding="utf-8"))
++    spec["derive_example"] = "Example: own."
++    p = ws_own.root / "m2.yaml"
++    p.write_text(yaml.safe_dump(spec, sort_keys=False), encoding="utf-8")
++    g = A.derive_guidance(load_semantic_model(p))
++    assert "Example: own." in g and "net_revenue_fen" not in g
++
++
++E3A_MODEL = Path(__file__).resolve().parents[1] / "experiments/E3a/context/semantic_model.yaml"
++
++
++@pytest.mark.parametrize("question, dims, filters, honest", [
++    ("What were net product sales in the UK in March 2025, in GBP?", [], {"market": "UK"}, True),
++    ("What were net product sales in the UK in March 2025, in GBP?", [], {"country": "United Kingdom"}, True),
++    ("What were net product sales in the UK in March 2025, in GBP?", ["market"], None, True),
++    ("Net product sales in the United Kingdom in March 2025?", [], {"market": "UK"}, True),
++    ("Net product sales outside the UK in March 2025?", [], {"market": "non-UK"}, True),
++    ("Net product sales outside the UK in March 2025?", [], {"market": "UK"}, False),
++    ("Net product sales in non UK markets in March 2025?", [], {"market": "non-UK"}, True),
++    ("Net product sales, UK vs non-UK, March 2025?", ["market"], None, True),
++    ("2025年3月非英国市场的净产品销售额？", [], {"market": "non-UK"}, True),
++    ("2025年3月英国以外的净产品销售额？", [], {"market": "non-UK"}, True),
++    ("2025年3月英国市场的净产品销售额？", [], {"market": "non-UK"}, False),
++    ("Net product sales in Germany in March 2025?", [], {"country": "Germany"}, True),
++    ("Net product sales in Germany in March 2025?", [], {"market": "non-UK"}, False),
++    ("2025年3月德国的净产品销售额？", [], {"country": "Germany"}, True),
++    ("Net product sales in Ireland in March 2025?", [], {"country": "EIRE"}, True),
++    ("Net product sales for non-UK customers by country in March 2025?", ["country"], {"market": "non-UK"}, True),
++    ("Net product sales in March 2025?", [], {"market": "UK"}, False),
++    ("How did the Duke Street shop do in March 2025?", [], None, True),
++])
++def test_dimension_values_with_capitals_and_overlapping_spellings(question, dims, filters, honest):
++    """Retail values are capitalised and overlap ("UK" in "non-UK", 英国 in 非英国); one phrase can name two
++    dimensions ("UK": market or country). Found by the E3a smoke run: "in the UK" was read as no market."""
++    model = load_semantic_model(E3A_MODEL)
++    call = A.normalize_metric_call({"metric": "net_product_sales", "dimensions": dims,
++                                    "months": ["2025-03", "2025-03"], "filters": filters})
++    assert (A.claim_contradictions(model, question, call) == []) == honest
++
++
++def test_a_misspelled_country_is_an_error_not_an_empty_answer():
++    model = load_semantic_model(E3A_MODEL)
++    with pytest.raises(ValueError, match="unknown values"):
++        compile_metric(model, "net_product_sales", [], ("2025-03", "2025-03"), {"country": "Ireland"})

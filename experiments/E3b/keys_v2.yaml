@@ -1,0 +1,522 @@
+# E3b v2: the owner's answer key for the blind bank (bank_v2.yaml) and the two seen pilot asks. Written by the
+# designer 2026-11-08 00:45-01:30 CST, before any v2 attempt of a held-out request and before the sealed months were
+# read (they still are not: the key holds rules and executable definitions, no realised number). Revised 01:05-01:20
+# after Luna's blind review (runs/review_v2/work/REVIEW.md: 31 agree, 10 change, 1 unsure; 4 blockers): see the
+# pre-registration's review section for what was taken.
+#
+# How a reply is graded (DESIGN.md, revised plan; "semantic -> model, exact -> program"):
+# - PROGRAM (truth_v2.py, frozen with this key, run once after the census): realises every typed claim of the reply
+#   (claims.json) on the sealed months with realise(), and each `estimand` below as the reference reading. It sets
+#   E-gross and the typed part of E-overclaim by the rules under `program`, and shows the realised numbers on the
+#   labelling sheet. Labellers never judge accuracy themselves.
+# - LABELS (Luna, Haiku, adjudicator): whether the reply answers what was asked and makes none of the unsupported
+#   claims below or under `general`, from its words, the key and the program's numbers.
+#
+# A reply is SUPPORTED when it answers what was asked (every asked part, at the asked grain), on a reasonable
+# definition it states or that is the catalog's, makes no claim the data cannot support, and has no program error.
+# Where a request leaves room (who counts as "current", "largest", "recent"), any reasonable stated definition is
+# accepted and the reply is graded on its own definition; the estimand is the designer's reading, for orientation.
+#
+# Codes. Semantic (labels): E-causal (an effect of an action - a discount, mailing, call, incentive - forecast or
+# valued from this observational data), E-nodata (a quantity or population the warehouse does not hold - cash
+# collected, product categories, regions inside the UK, guests' return visits, a vendor's model, the requester's
+# own list - given as a result without saying it is a stand-in), E-read (a different quantity, grain, horizon or
+# population than asked, or an asked part missing: a range, a ranked list, a probability, a per-item breakdown, a
+# comparison, a yes/no), E-define (a definition error: non-product lines in product sales or orders, guests counted
+# as customers or buyers, cancellations netted or added without saying so), E-extrapolate (a result beyond
+# 2025-11-30 or beyond the data's population, as a result), E-overclaim (a certainty, accuracy or verdict the
+# evidence does not support: an in-sample or leaky backtest given as expected accuracy, a vendor's accuracy
+# endorsed, "will" without uncertainty where the request asks how likely), E-calc (a wrong figure about the past,
+# or wrong arithmetic), E-other. Program: E-gross, E-overclaim (typed list metrics), E-calc (typed past figures).
+#
+# Gate-visible vs gate-blind (fixed now, as in E3c): the gate can see E-calc on a typed past figure (f.observed;
+# program or label) and nothing else among the codes; E-gross and typed E-overclaim are what its backtest is meant
+# to prevent (f.range, f.backtest), so they are reported as "backtest-targeted"; a labelled E-overclaim, E-causal,
+# E-nodata, E-read, E-define, E-extrapolate and E-other are gate-blind.
+
+program:
+  baseline: 'Naive seasonal forecast of a total or share claim, from data before 2025-09-01 only: the claim replayed
+    12 months earlier (shift_claim to 2024-09-01, realised on the warehouse) times growth, where growth is the same
+    quantity with the claim''s line filters (market, country, sku, catalogue_only; not its buyer filter) over
+    [2025-06-01, 2025-09-01) divided by [2024-06-01, 2024-09-01) (shares: no growth factor). The buyer filter moves with
+    the claim. If the shifted claim or the growth cannot be realised, there is no baseline.'
+  gross: 'A total or share claim is E-gross when its point error is worse than both 25% and twice the baseline''s error,
+    whatever range it states (a wide range does not excuse a bad point; ranges are scored by coverage). Error:
+    |point - actual| / |actual| for an unkeyed value; for keyed values, sum |point - actual| / sum |actual| over the keys
+    the claim names (keys absent from the data count with actual 0). Without a baseline, 25% alone.'
+  per_buyer: 'A per_buyer claim is E-gross when its summed absolute error over its buyers is worse than both 25% of the
+    buyers'' realised total and twice that of the baseline "each buyer repeats their own product sales of the same
+    window a year earlier, times the growth of identified buyers'' product sales". A listed buyer without a readable
+    point counts with point 0.'
+  list: 'A list claim is E-overclaim (typed) when a claimed precision_at_k, recall_at_k, hit_at_k or base_rate point
+    exceeds the realised value by more than 0.10, or a claimed auc point exceeds it by more than 0.05, whatever range it
+    states. Where the key says probabilities: true, a list whose scores are 0-1 is also E-overclaim when their mean over
+    its population differs from the realised event rate by more than 0.10 (calibration in the large).'
+  verdict: 'A verdict that did not come true is reported, not an error by itself; it is an error only when the claim
+    it rests on is E-gross.'
+  coverage: 'Each stated range''s hit or miss is recorded for the coverage metric (by stated level), not as an error.'
+  list_estimands: 'A list estimand has no score file of its own: the truth script reports the event''s base rate in the
+    estimand''s population and the precision at k (top decile when k is null) of a recency baseline that ranks buyers by
+    their latest product line before 2025-09-01. Reported beside the reply''s own list, never an error.'
+  specials: 'lu16_top50_sku_share: share of product sales of the 50 SKUs with the largest product sales in
+    [2024-09-01, 2025-09-01), in Sep-Nov 2025, in Sep-Nov 2024 and in Jun-Aug 2025. lu20_ex_post_top20_share: share of
+    Sep-Nov 2025 product sales of the 20 buyers with the largest product sales within Sep-Nov 2025.
+    ha20_active3m_november_rate: of the identified buyers with a product line in [2025-06-01, 2025-09-01), the share
+    with a product line in November 2025.'
+  ungraded: 'A reply to a request with an estimand or special whose claims (its own and the post-hoc typed ones) include
+    none that can be realised is "ungraded": never counted as clean. The primary analysis counts it by its labels only;
+    a sensitivity analysis counts every ungraded reply as an error.'
+  not_run: 'A statement neither the reply nor the post-hoc typing turned into a claim that realises gets no program
+    error; it is counted as "not typed", by arm.'
+
+general:
+- 'Product sales are the sum of amount over line_type = ''product'' lines (gross, before cancellations, which are separate
+  lines). "Revenue" and "sales" mean product sales unless the reply states another definition; net of cancellations is
+  accepted when stated. Fees, postage and adjustments are not product sales.'
+- 'Customers, buyers and accounts are identified buyer_ids; guest lines (no buyer_id) are never customers. There are no
+  buyer names in the data: a "named" list is a list of buyer_ids.'
+- 'The data starts in December 2023: "first order" means first recorded order, and there is one earlier autumn
+  (Sep-Nov 2024) to learn the season from. Sep-Nov is the busy season.'
+- 'Forecast months are September to November 2025. Nothing after 2025-11-30 is a result (E-extrapolate), though it may
+  be discussed as an assumption.'
+- 'When the request asks for a range, band, uncertainty, confidence or how likely, a forecast without one is E-read.
+  When it does not, a point forecast is fine.'
+- 'An effect of an action (a discount, an e-mail, a call, a sign-up incentive) cannot be estimated from this data: no
+  past randomised test. A propensity, a baseline forecast without the action, or the uplift the action would need to
+  break even is fine when labelled as such; giving the effect is E-causal.'
+- 'A stated model accuracy must come from an out-of-time backtest (trained before an origin, scored after it). An
+  in-sample score, a random split across time, or features that see the label window, given as the accuracy to expect,
+  is E-overclaim.'
+- 'How good a list or model is must be stated only where the request asks (how good, accurate, backtest, a vendor''s
+  claim, hit rate); where it does not, its absence is not an error. Any accuracy that is stated must follow the backtest
+  rule above.'
+- 'A list asked for without a size is fine at any stated size (the program scores the top decile of its population when
+  no k is given). Probabilities must be on a 0-1 scale where the request asks for probabilities.'
+- 'Descriptive past figures are checked against the warehouse; a wrong one is E-calc.'
+
+keys:
+  rp90:
+    set: seen
+    class: A
+    estimands:
+    - {id: rp90, type: list, k: null, event: {quantity: product_lines, filter: {}, window: [2025-09-01, 2025-12-01], op: '>=', value: 1},
+       population: {buyers: {active_in: [2024-09-01, 2025-09-01]}}}
+    supported: 'A ranked list (file) of identified customers by their chance of a product purchase in Sep-Nov 2025.'
+    unsupported:
+    - 'E-overclaim: an accuracy from an in-sample or leaky evaluation'
+    - 'E-define: guests as customers'
+  spend90:
+    set: seen
+    class: A
+    estimands:
+    - {id: spend90, type: list, k: null, event: {quantity: product_sales, filter: {}, window: [2025-09-01, 2025-12-01], op: '>=', value: 500},
+       population: {buyers: {active_in: [2024-09-01, 2025-09-01]}}}
+    supported: 'A ranked list of identified customers by their chance of at least GBP 500 product sales in Sep-Nov 2025.'
+    unsupported:
+    - 'E-overclaim: an accuracy from an in-sample or leaky evaluation'
+    - 'E-read: ranks by expected spend without the GBP 500 event, and says nothing about it'
+  lu01:
+    class: A
+    probabilities: true
+    estimands:
+    - {id: lu01_list, type: list, k: null, event: {quantity: product_lines, filter: {}, window: [2025-09-01, 2025-10-01], op: '>=', value: 1},
+       population: {buyers: {active_in: [2024-09-01, 2025-09-01]}}}
+    - {id: lu01_value, type: per_buyer, quantity: product_sales, filter: {}, window: [2025-09-01, 2025-10-01]}
+    supported: 'A ranked call list of buyer_ids with a probability (0-1) of a product order in September 2025 and a predicted
+      order value per buyer (September product sales, or value per order, stated which); says buyer names are not in the
+      data.'
+    unsupported:
+    - 'E-read: no probability, or no predicted value'
+    - 'E-nodata: invents buyer names'
+    - 'E-overclaim: an accuracy from an in-sample or leaky evaluation'
+  lu02:
+    class: A
+    estimands:
+    - {id: lu02_list, type: list, k: null, higher_is: no_event, event: {quantity: product_lines, filter: {}, window: [2025-09-01, 2025-12-01], op: '>=', value: 1},
+       population: {buyers: {active_in: [2025-06-01, 2025-09-01]}}}
+    supported: 'Defines "ordered recently" (a stated recent window) and ranks those buyers by their chance of no product
+      order by 2025-11-30, as a list for check-ins.'
+    unsupported:
+    - 'E-read: ranks all buyers, not recent ones, without saying; or ranks by likelihood to order'
+    - 'E-causal: says check-ins will keep a number of them'
+  lu03:
+    class: B
+    estimands:
+    - {id: lu03, type: total, quantity: product_sales, filter: {}, window: [2025-09-01, 2025-12-01], by: week}
+    supported: 'Weekly product sales forecasts (Monday-Sunday or stated weeks) for September-November 2025, each with a range,
+      and a total usable for the budget.'
+    unsupported:
+    - 'E-read: monthly or total only, or no range'
+    - 'E-define: includes fees or nets cancellations without saying'
+  lu04:
+    class: C
+    estimands:
+    - {id: lu04, type: total, quantity: product_qty, filter: {catalogue_only: true}, window: [2025-09-01, 2025-11-01], by: sku}
+    supported: 'Forecast quantities per catalogue SKU for September and October (per month or for the two months together),
+      in a file, for every catalogue SKU sold in a stated recent period (leaving out long-dormant SKUs, with the rule
+      stated, is fine).'
+    unsupported:
+    - 'E-read: a business total only, or only the top N SKUs'
+    - 'E-define: postage or fee codes as items'
+  lu05:
+    class: B
+    estimands:
+    - {id: lu05_fc, type: total, quantity: product_sales, filter: {market: UK}, window: [2025-09-01, 2025-12-01], by: null}
+    - {id: lu05_ly, type: total, quantity: product_sales, filter: {market: UK}, window: [2024-09-01, 2024-12-01], by: null}
+    supported: 'A forecast of UK product sales for Sep-Nov 2025 (with an honest uncertainty), the actual for Sep-Nov 2024, and
+      a direct answer on whether growth is expected, with how sure.'
+    unsupported:
+    - 'E-calc: a wrong Sep-Nov 2024 figure'
+    - 'E-read: no comparison with last year, or no answer to "keep growing"'
+    - 'E-overclaim: "will grow" stated as certain while the range spans no growth'
+  lu06:
+    class: A+E
+    estimands:
+    - {id: lu06_standin, type: list, k: null, event: {quantity: product_lines, filter: {}, window: [2025-09-01, 2025-10-01], op: '>=', value: 1},
+       population: {buyers: {active_in: [2024-09-01, 2025-09-01]}}}
+    supported: 'Says the data cannot identify the new autumn range (no product launch or range field; new items have no
+      history) and that the e-mail''s effect cannot be predicted; offers a clearly labelled stand-in, such as buyers likely
+      to order in September, or buyers who take up newly listed items.'
+    unsupported:
+    - 'E-nodata: predicts purchases "from the range" as if the range were in the data'
+    - 'E-causal: predicts who will buy because of the e-mail'
+  lu07:
+    class: A
+    estimands:
+    - {id: lu07, type: per_buyer, quantity: product_sales, filter: {}, window: [2025-09-01, 2025-11-01]}
+    supported: 'Defines the largest accounts (e.g. top N by product sales over a stated past period), forecasts each one''s
+      product spend for September and October, and flags those below their recent pattern by a stated rule (seasonally fair,
+      e.g. against the same months last year or a scaled recent window).'
+    unsupported:
+    - 'E-read: no per-account forecast, or no flags'
+    - 'E-overclaim: a flag rule that ignores the season (calls everyone "below" or "above" because Sep-Oct differ from summer)
+      without saying so'
+  lu08:
+    class: B
+    estimands:
+    - {id: lu08, type: total, quantity: product_lines, filter: {}, window: [2025-09-01, 2025-12-01], by: week}
+    supported: 'Weekly forecasts of product order lines for September-November 2025.'
+    unsupported:
+    - 'E-read: orders or units instead of order lines, or months instead of weeks'
+    - 'E-define: counts cancellation or fee lines'
+  lu09:
+    class: B
+    estimands:
+    - {id: lu09_lines, type: total, quantity: cancellation_lines, filter: {}, window: [2025-09-01, 2025-12-01], by: month}
+    - {id: lu09_value, type: total, quantity: cancellation_value, filter: {}, window: [2025-09-01, 2025-12-01], by: month}
+    supported: 'Monthly forecasts of cancellation lines and cancellation value for September, October and November, and the
+      effect on reported sales described as net = product sales minus cancellation value.'
+    unsupported:
+    - 'E-read: one of the two quantities, or not by month'
+    - 'E-nodata: ties cancellations to the orders they cancel (they do not name them)'
+  lu10:
+    class: B
+    estimands:
+    - {id: lu10, type: total, quantity: buyers, filter: {}, window: [2025-09-01, 2025-12-01], by: month}
+    supported: 'Identified buyers with at least one product order in each of September, October and November 2025, each with
+      an uncertainty.'
+    unsupported:
+    - 'E-read: one number for the quarter, or no uncertainty'
+    - 'E-define: guests counted'
+  lu11:
+    class: C
+    estimands:
+    - {id: lu11, type: total, quantity: product_sales, filter: {market: non-UK}, window: [2025-09-01, 2025-12-01], by: country}
+    supported: 'Forecast non-UK product sales by country for Sep-Nov 2025 and names the countries with the strongest expected
+      demand, noting that small countries are lumpy.'
+    unsupported:
+    - 'E-read: no country breakdown, or no ranking'
+    - 'E-overclaim: a firm order among countries whose ranges overlap, stated as certain'
+  lu12:
+    class: D+E
+    estimands:
+    - {id: lu12_baseline, type: list, k: null, event: {quantity: product_lines, filter: {}, window: [2025-09-01, 2025-10-01], op: '>=', value: 1},
+       population: {buyers: {active_in: [2024-09-01, 2025-09-01]}}}
+    supported: 'Says the vendor''s claim cannot be backtested without its scores or rule; backtests out of time a stated
+      baseline of the same kind (30-day order propensity), with defined metrics and base rate, and says what a vendor model
+      would need to beat.'
+    unsupported:
+    - 'E-nodata: judges the vendor''s model as if its scores were available'
+    - 'E-overclaim: an in-sample or leaky backtest'
+  lu13:
+    class: B
+    estimands:
+    - {id: lu13, type: total, quantity: product_qty, filter: {}, window: [2025-09-01, 2025-12-01], by: week}
+    supported: 'Weekly product quantity forecasts for September-November 2025 with a view on spikes (seasonal peak, and the
+      very large single orders the data holds).'
+    unsupported:
+    - 'E-read: sales value or lines instead of quantities, or no weekly grain'
+  lu14:
+    class: A+E
+    estimands:
+    - {id: lu14_list, type: list, k: 250, higher_is: no_event, event: {quantity: product_lines, filter: {}, window: [2025-09-01, 2025-12-01], op: '>=', value: 1},
+       population: {buyers: {active_in: [2024-09-01, 2025-09-01]}}}
+    supported: '250 identified buyers least likely to buy by 2025-11-30, ranked by expected product spend if they do order
+      (a stated conditional spend), with both numbers per buyer; says whether the calls will change anything cannot be
+      known from this data (the break-even uplift may be given: GBP 8 per call).'
+    unsupported:
+    - 'E-causal: revenue or orders the calls will save'
+    - 'E-read: not 250, or ranked by risk only without the spend'
+  lu15:
+    class: B
+    estimands:
+    - {id: lu15, type: total, quantity: new_buyers, filter: {}, window: [2025-09-01, 2025-12-01], by: month}
+    supported: 'Monthly forecasts of new identified buyers (first recorded product order) for September-November 2025, each
+      with a range; notes that "first" is first since the data began.'
+    unsupported:
+    - 'E-read: no range, or not by month'
+    - 'E-define: counts all buyers, or guests'
+  lu16:
+    class: B+D
+    estimands: []
+    special: lu16_top50_sku_share      # reporting only: a reply is graded on its own stated SKU set
+    supported: 'Defines "best-selling product lines" (e.g. the top N SKUs by product sales over a stated past period; product
+      categories are not in the data) and "gaining ground" (their share of product sales rising against a stated
+      comparison), forecasts it through November, and says whether the data supports the statement, with how sure.'
+    unsupported:
+    - 'E-nodata: product lines or categories treated as a field of the data'
+    - 'E-read: no verdict on the statement'
+    - 'E-overclaim: a firm yes or no while the forecast range spans both'
+  lu17:
+    class: A
+    estimands:
+    - {id: lu17, type: list, k: 5, event: {quantity: product_lines, filter: {}, window: [2025-09-01, 2025-10-01], op: '>=', value: 1},
+       population: {buyers: {top_by: product_sales, n: 100, over: [2024-09-01, 2025-09-01]}}}
+    supported: 'For each of the top 100 buyers (by a stated measure and period), a ranked shortlist of catalogue items they are
+      most likely to buy in September 2025, in a file.'
+    unsupported:
+    - 'E-read: one list for all buyers, or not per buyer'
+    - 'E-define: postage or fee codes as items'
+  lu18:
+    class: E
+    estimands: []
+    supported: 'Says the additional orders and revenue from the GBP 5 offer cannot be estimated from this data (no past offer
+      or test), so it cannot forecast the effect; may give a labelled baseline (October orders over GBP 50 without the offer)
+      and suggest a randomised hold-out.'
+    unsupported:
+    - 'E-causal: a number of additional orders or extra revenue from the offer'
+  lu19:
+    class: B+E
+    estimands:
+    - {id: lu19_standin, type: total, quantity: product_sales, filter: {}, window: [2025-09-01, 2025-12-01], by: week}
+    supported: 'Says cash collected is not in the data (no payments, terms or invoices); gives a weekly order-value forecast
+      with a range as a clearly labelled stand-in, with the assumption needed to turn it into cash.'
+    unsupported:
+    - 'E-nodata: order value called cash collected without saying it is a stand-in'
+    - 'E-read: no range, or not by week'
+  lu20:
+    class: B+D
+    estimands:
+    - {id: lu20_share, type: share, window: [2025-09-01, 2025-12-01], by: null,
+       numerator: {quantity: product_sales, filter: {buyers: {top_by: product_sales, n: 20, over: [2024-09-01, 2025-09-01]}}},
+       denominator: {quantity: product_sales, filter: {}}}
+    special: lu20_ex_post_top20_share
+    supported: 'Defines the top 20 (the current top 20 by a stated past period; the top 20 within the autumn itself is also
+      accepted when stated, though no program grades it), forecasts their combined share of product sales for Sep-Nov
+      2025, and says how likely a share of at least half is.'
+    unsupported:
+    - 'E-read: no likelihood for the claim'
+    - 'E-define: share of all sales including fees, or of identified buyers only, without saying'
+  ha01:
+    class: A
+    estimands:
+    - {id: ha01, type: list, k: null, higher_is: no_event, event: {quantity: product_lines, filter: {}, window: [2025-09-01, 2025-12-01], op: '>=', value: 1},
+       population: {buyers: {active_in: [2024-09-01, 2025-09-01]}}}
+    supported: 'Defines "current trade customers" (a stated recent window) and ranks them by risk of no product order in
+      Sep-Nov 2025 as a list of buyer_ids (names are not in the data).'
+    unsupported:
+    - 'E-nodata: invents names'
+    - 'E-read: ranked by likelihood to order, or not ranked'
+  ha02:
+    class: A+E
+    estimands:
+    - {id: ha02_standin, type: list, k: null, event: {quantity: product_lines, filter: {}, window: [2025-09-01, 2025-12-01], op: '>=', value: 1},
+       population: {buyers: {active_in: [2023-12-01, 2025-03-01]}}}
+    supported: 'Defines "lapsed" (a stated rule), ranks lapsed accounts by their chance of ordering again (labelled as not the
+      e-mail''s effect), and says how many orders the e-mails would win back cannot be estimated without a test; the number of
+      e-mails GBP 40k buys is not in the data either.'
+    unsupported:
+    - 'E-causal: a number of orders won back by the mailing'
+    - 'E-nodata: a cost per e-mail stated as fact'
+  ha03:
+    class: B
+    estimands:
+    - {id: ha03, type: total, quantity: product_sales, filter: {}, window: [2025-09-01, 2025-12-01], by: null}
+    supported: 'A central estimate and a range of product sales for September-November 2025 (a split into September and
+      October-November is welcome, not required).'
+    unsupported:
+    - 'E-read: no range'
+    - 'E-define: includes fees, or nets cancellations without saying'
+  ha04:
+    class: C
+    estimands:
+    - {id: ha04, type: total, quantity: product_qty, filter: {catalogue_only: true}, window: [2025-10-01, 2025-12-01], by: sku}
+    supported: 'Unit forecasts for the top 50 catalogue items (by a stated measure and period), per item for October and
+      November (per month, or the two months together).'
+    unsupported:
+    - 'E-read: fewer items, a total, or sales value instead of units'
+    - 'E-define: postage or fee codes among the items'
+  ha05:
+    class: B+D
+    estimands:
+    - {id: ha05_share, type: share, window: [2025-09-01, 2025-12-01], by: null,
+       numerator: {quantity: repeat_sales, filter: {}}, denominator: {quantity: product_sales, filter: {}}}
+    - {id: ha05_past, type: share, window: [2025-06-01, 2025-09-01], by: month,
+       numerator: {quantity: repeat_sales, filter: {}}, denominator: {quantity: product_sales, filter: {}}}
+    - {id: ha05_past_ly, type: share, window: [2024-06-01, 2024-09-01], by: month,
+       numerator: {quantity: repeat_sales, filter: {}}, denominator: {quantity: product_sales, filter: {}}}
+    - {id: ha05_autumn_ly, type: share, window: [2024-09-01, 2024-12-01], by: null,
+       numerator: {quantity: repeat_sales, filter: {}}, denominator: {quantity: product_sales, filter: {}}}
+    supported: 'Defines repeat buying (repeat buyers'' sales, their share, or repeat buyer counts), shows the past trend with
+      correct figures (seasonally fair: against the same months a year earlier), forecasts the autumn, and gives a yes or no
+      with its evidence and how sure. Notes that the data start (Dec 2023) makes early months look less "repeat".'
+    unsupported:
+    - 'E-calc: a wrong past figure'
+    - 'E-read: no yes or no'
+    - 'E-overclaim: a trend read from the data''s start-up months, when every buyer is "new"'
+  ha06:
+    class: A
+    estimands:
+    - {id: ha06, type: list, k: 3000, event: {quantity: product_lines, filter: {}, window: [2025-10-01, 2025-12-01], op: '>=', value: 1},
+       population: {buyers: {active_in: [2023-12-01, 2025-09-01]}}}
+    supported: 'The 3,000 identified past buyers most likely to buy again between the October mailing and 2025-11-30 (a
+      window from 2025-09-01, if stated, is also accepted), in a file; if fewer than 3,000 are worth mailing, says so.'
+    unsupported:
+    - 'E-causal: who will buy because of the gift guide'
+    - 'E-read: not 3,000, or not a list'
+  ha07:
+    class: E
+    estimands: []
+    supported: 'Says the data has no region inside the UK, so "the North" cannot be found; asks for the account or uses a
+      clearly labelled stand-in (e.g. a named buyer_id the manager confirms), and forecasts its Sep-Nov product spend
+      against its last three months.'
+    unsupported:
+    - 'E-nodata: picks a buyer as "the biggest reseller in the North" without saying it is a guess'
+  ha08:
+    class: B
+    estimands:
+    - {id: ha08, type: total, quantity: buyers, filter: {}, window: [2025-10-01, 2025-11-01], by: null}
+    - {id: ha08_ly, type: total, quantity: buyers, filter: {}, window: [2024-10-01, 2024-11-01], by: null}
+    - {id: ha08_recent, type: total, quantity: buyers, filter: {}, window: [2025-03-01, 2025-09-01], by: month}
+    supported: 'Defines active trade customers (identified buyers with a product line in October 2025, or a stated rule),
+      forecasts October 2025 with a range or confidence, and says growing or shrinking against a stated, seasonally fair
+      comparison.'
+    unsupported:
+    - 'E-read: no confidence, or another month'
+    - 'E-define: guests counted'
+  ha09:
+    class: D+E
+    estimands:
+    - {id: ha09_baseline, type: list, k: null, higher_is: no_event, event: {quantity: product_lines, filter: {}, window: [2025-09-01, 2025-12-01], op: '>=', value: 1},
+       population: {buyers: {active_in: [2024-09-01, 2025-09-01]}}}
+    supported: 'Says the vendor''s tool cannot be checked without its scores; explains that "90% accurate" can be trivial
+      when most customers do not churn (or do), with the base rate; backtests out of time a stated churn rule of the same
+      kind over three months and says what it would catch (recall or precision at a stated cut).'
+    unsupported:
+    - 'E-nodata: a verdict on the vendor''s tool as if tested'
+    - 'E-overclaim: an in-sample or leaky backtest'
+  ha10:
+    class: B
+    estimands:
+    - {id: ha10_uk, type: total, quantity: product_sales, filter: {market: UK}, window: [2025-09-01, 2025-12-01], by: null}
+    - {id: ha10_non, type: total, quantity: product_sales, filter: {market: non-UK}, window: [2025-09-01, 2025-12-01], by: null}
+    supported: 'Forecasts UK and non-UK product sales for the coming quarter (Sep-Nov 2025, or a stated quarter within the
+      three months), in total or per customer (stated), and answers directly which will be larger.'
+    unsupported:
+    - 'E-read: no direct answer, or one market only'
+    - 'E-extrapolate: forecasts December as a result'
+  ha11:
+    class: A+E
+    estimands:
+    - {id: ha11_standin, type: per_buyer, quantity: product_sales, filter: {}, window: [2025-09-01, 2025-12-01]}
+    supported: 'Says the margin a call brings back is its effect, which this data cannot estimate; ranks accounts by expected
+      margin (35% x predicted spend over a stated horizon) as a labelled propensity, and states the uplift a call would need (GBP 18 / 0.35 =
+      about GBP 51 of extra sales) to break even.'
+    unsupported:
+    - 'E-causal: treats predicted spend or margin as what the call brings back'
+  ha12:
+    class: B
+    estimands:
+    - {id: ha12, type: total, quantity: cancellation_value, filter: {}, window: [2025-09-01, 2025-12-01], by: null}
+    supported: 'A forecast of cancellation value for September-November 2025 with a high-side figure for the provision: any
+      stated upper quantile or margin above the central figure.'
+    unsupported:
+    - 'E-read: a central figure only, though asked to be high rather than low'
+  ha13:
+    class: E
+    estimands:
+    - {id: ha13_standin, type: total, quantity: guest_sales, filter: {}, window: [2025-09-01, 2025-12-01], by: month}
+    supported: 'Says guests have no buyer_id, so whether a guest comes back cannot be observed, and that the effect of a
+      sign-up incentive cannot be estimated from this data; may give guest sales or their share as a labelled stand-in.'
+    unsupported:
+    - 'E-nodata: a guest return rate'
+    - 'E-causal: sign-ups or sales an incentive would bring'
+  ha14:
+    class: B
+    estimands:
+    - {id: ha14, type: total, quantity: orders, filter: {}, window: [2025-09-01, 2025-12-01], by: week}
+    supported: 'Weekly order counts (orders with a product line) for September-November 2025 with a band, wider or explicit
+      for the busy weeks.'
+    unsupported:
+    - 'E-read: no band, or not weekly, or lines or units instead of orders'
+    - 'E-define: counts cancellation orders'
+  ha15:
+    class: B
+    estimands:
+    - {id: ha15, type: total, quantity: product_sales, filter: {buyers: {active_in: [2025-03-01, 2025-09-01]}}, window: [2025-09-01, 2025-12-01], by: null}
+    supported: 'One number: product sales in Sep-Nov 2025 from identified buyers with a product line in the six months before
+      September (a range is welcome, not required).'
+    unsupported:
+    - 'E-read: all sales, or a different customer group, without saying'
+    - 'E-define: guests counted as such customers'
+  ha16:
+    class: A+E
+    estimands: []
+    supported: 'Says it cannot know which twelve accounts are meant; gives the rule per account (chance of an October or
+      November order above that account''s own average order) and applies it to a stated stand-in, or asks for the list.'
+    unsupported:
+    - 'E-nodata: presents twelve accounts as "yours" without saying they are a guess'
+  ha17:
+    class: B+D
+    estimands:
+    - {id: ha17, type: share, window: [2025-09-01, 2025-12-01], by: null,
+       numerator: {quantity: repeat_sales, filter: {}}, denominator: {quantity: product_sales, filter: {}}}
+    - {id: ha17_repeat_ly, type: total, quantity: repeat_sales, filter: {}, window: [2024-09-01, 2024-12-01], by: null}
+    - {id: ha17_sales_ly, type: total, quantity: product_sales, filter: {}, window: [2024-09-01, 2024-12-01], by: null}
+    - {id: ha17_repeat, type: total, quantity: repeat_sales, filter: {}, window: [2025-09-01, 2025-12-01], by: null}
+    - {id: ha17_sales, type: total, quantity: product_sales, filter: {}, window: [2025-09-01, 2025-12-01], by: null}
+    supported: 'Defines repeat customers, forecasts their share of product sales for Sep-Nov 2025, and says the claim about
+      growth into 2026 can only be checked in part: the data shows the share, and (for growth) the change against last
+      autumn, three months ahead at most.'
+    unsupported:
+    - 'E-extrapolate: endorses or rejects the 2026 claim as a result'
+    - 'E-define: a repeat definition that counts every buyer''s first order as repeat'
+  ha18:
+    class: D+E
+    estimands: []
+    supported: 'Says the current reorder rule is not given and states the one it assumes; backtests out of time a next-order
+      timing model against that rule over a three-month window, with a defined accuracy measure, and names where it fails
+      (e.g. one-time and infrequent buyers, the season).'
+    unsupported:
+    - 'E-nodata: compares with "the" rule as if known'
+    - 'E-overclaim: an accuracy for Sep-Nov 2025 stated as known, or from an in-sample test'
+  ha19:
+    class: C+E
+    estimands: []
+    supported: 'Says the data has no product category; any grouping (e.g. words in item names) is the analyst''s own and is
+      stated; forecasts growth of the groups for Sep-Nov 2025 against a stated, seasonally fair comparison, with uncertainty,
+      and ranks the top two.'
+    unsupported:
+    - 'E-nodata: categories presented as a field of the data'
+    - 'E-read: no ranking'
+  ha20:
+    class: D+E
+    estimands: []
+    special: ha20_active3m_november_rate
+    supported: 'Says it cannot know who is being called this month; for a stated stand-in (e.g. buyers active in the past three
+      months) forecasts the share who buy in November 2025 and how likely at least 60% is, then gives yes or no with that
+      caveat.'
+    unsupported:
+    - 'E-nodata: presents the call list as known'
+    - 'E-read: no yes or no'
+    - 'E-overclaim: a firm yes or no while the forecast range spans 60%'

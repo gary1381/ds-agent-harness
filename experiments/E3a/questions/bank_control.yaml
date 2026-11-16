@@ -1,0 +1,1493 @@
+- qid: R-L01
+  set: R
+  author: luna
+  lang: en
+  question: How much gross product sales did we book in February 2011 in the UK? Please
+    give GBP.
+  keys: []
+  unit: gbp
+  months:
+  - 2011-02
+  - 2011-02
+  truth_sql: "SELECT COALESCE(SUM(amount), 0) AS value\nFROM truth_lines\nWHERE month\
+    \ = '2011-02'\n  AND market = 'UK'\n  AND line_type = 'product'\n"
+  notes: Gross product sales include product lines and exclude cancellations and non-product
+    lines.
+- qid: R-L02
+  set: R
+  author: luna
+  lang: en
+  question: What were net product sales in Q1 2011 for non-UK markets, in GBP?
+  keys: []
+  unit: gbp
+  months:
+  - 2011-01
+  - 2011-03
+  truth_sql: "SELECT\n  COALESCE(SUM(CASE WHEN line_type = 'product' THEN amount ELSE\
+    \ 0 END), 0)\n  - COALESCE(SUM(CASE WHEN line_type = 'cancellation' THEN ABS(amount)\
+    \ ELSE 0 END), 0) AS value\nFROM truth_lines\nWHERE month BETWEEN '2011-01' AND\
+    \ '2011-03'\n  AND market = 'non-UK'\n"
+  notes: Net product sales are gross product sales minus the positive value of cancellation
+    lines.
+- qid: R-L03
+  set: R
+  author: luna
+  lang: en
+  question: How many orders had at least one product line in November 2011?
+  keys: []
+  unit: count
+  months:
+  - 2011-11
+  - 2011-11
+  truth_sql: "SELECT COUNT(DISTINCT order_no) AS value\nFROM truth_lines\nWHERE month\
+    \ = '2011-11'\n  AND line_type = 'product'\n"
+  notes: Counts distinct orders with at least one product line.
+- qid: R-L04
+  set: R
+  author: luna
+  lang: en
+  question: What was the average order value in the UK in June 2010, in GBP?
+  keys: []
+  unit: gbp
+  months:
+  - 2010-06
+  - 2010-06
+  truth_sql: "WITH sales AS (\n  SELECT COALESCE(SUM(amount), 0) AS gross_sales\n\
+    \  FROM truth_lines\n  WHERE month = '2010-06'\n    AND market = 'UK'\n    AND\
+    \ line_type = 'product'\n),\norders AS (\n  SELECT COUNT(DISTINCT order_no) AS\
+    \ order_count\n  FROM truth_lines\n  WHERE month = '2010-06'\n    AND market =\
+    \ 'UK'\n    AND line_type = 'product'\n)\nSELECT CASE WHEN order_count = 0 THEN\
+    \ NULL\n            ELSE gross_sales / order_count END AS value\nFROM sales CROSS\
+    \ JOIN orders\n"
+  notes: Average order value is gross product sales divided by distinct orders containing
+    product lines.
+- qid: R-L05
+  set: R
+  author: luna
+  lang: zh
+  question: 2011年3月英国的产品销售总量是多少件？
+  keys: []
+  unit: count
+  months:
+  - 2011-03
+  - 2011-03
+  truth_sql: "SELECT COALESCE(SUM(qty), 0) AS value\nFROM truth_lines\nWHERE month\
+    \ = '2011-03'\n  AND market = 'UK'\n  AND line_type = 'product'\n"
+  notes: 按官方定义汇总产品行的数量。
+- qid: R-L06
+  set: R
+  author: luna
+  lang: en
+  question: How many distinct customers had at least one product line in non-UK markets
+    in October 2011? Exclude guest orders from the customer count.
+  keys: []
+  unit: count
+  months:
+  - 2011-10
+  - 2011-10
+  truth_sql: "SELECT COUNT(DISTINCT buyer_id) AS value\nFROM truth_lines\nWHERE month\
+    \ = '2011-10'\n  AND market = 'non-UK'\n  AND line_type = 'product'\n  AND buyer_id\
+    \ IS NOT NULL\n"
+  notes: Active customers are distinct non-null customer numbers with a product line.
+- qid: R-L07
+  set: R
+  author: luna
+  lang: en
+  question: By what percentage did UK gross product sales grow from February to March
+    2011? Use February as the comparison base.
+  keys: []
+  unit: percent
+  months:
+  - 2011-02
+  - 2011-03
+  truth_sql: "WITH monthly AS (\n  SELECT month, SUM(amount) AS gross_sales\n  FROM\
+    \ truth_lines\n  WHERE month IN ('2011-02', '2011-03')\n    AND market = 'UK'\n\
+    \    AND line_type = 'product'\n  GROUP BY month\n)\nSELECT\n  100.0 * (MAX(CASE\
+    \ WHEN month = '2011-03' THEN gross_sales END)\n         / NULLIF(MAX(CASE WHEN\
+    \ month = '2011-02' THEN gross_sales END), 0) - 1) AS value\nFROM monthly\n"
+  notes: Percentage growth is (March sales / February sales - 1) × 100.
+- qid: R-L08
+  set: R
+  author: luna
+  lang: en
+  question: In July 2011, what share of gross product sales came from non-UK markets?
+    Give a share from 0 to 1, not a percentage.
+  keys: []
+  unit: share
+  months:
+  - 2011-07
+  - 2011-07
+  truth_sql: "SELECT\n  SUM(CASE WHEN market = 'non-UK' THEN amount ELSE 0 END)\n\
+    \  / NULLIF(SUM(amount), 0) AS value\nFROM truth_lines\nWHERE month = '2011-07'\n\
+    \  AND line_type = 'product'\n"
+  notes: The denominator is gross product sales across all markets in July 2025.
+- qid: R-L09
+  set: R
+  author: luna
+  lang: en
+  question: What was average order value in August 2011 for each market, in GBP?
+  keys:
+  - market
+  unit: gbp
+  months:
+  - 2011-08
+  - 2011-08
+  truth_sql: "SELECT market,\n       SUM(amount) / NULLIF(COUNT(DISTINCT order_no),\
+    \ 0) AS value\nFROM truth_lines\nWHERE month = '2011-08'\n  AND line_type = 'product'\n\
+    GROUP BY market\nORDER BY market\n"
+  notes: For each market, average order value is gross product sales divided by distinct
+    orders with product lines.
+- qid: R-L10
+  set: R
+  author: luna
+  lang: en
+  question: Which five countries had the highest gross product sales in September
+    2011, and what were their sales in GBP? Exclude rows without a country; break
+    ties alphabetically.
+  keys:
+  - country
+  unit: gbp
+  months:
+  - 2011-09
+  - 2011-09
+  truth_sql: "SELECT country, SUM(amount) AS value\nFROM truth_lines\nWHERE month\
+    \ = '2011-09'\n  AND line_type = 'product'\n  AND country IS NOT NULL\nGROUP BY\
+    \ country\nORDER BY value DESC, country ASC\nLIMIT 5\n"
+  notes: Ranks countries by gross product sales; ties are ordered alphabetically.
+- qid: R-L11
+  set: R
+  author: luna
+  lang: en
+  question: In May 2011, how much gross product sales in GBP did we have per active
+    customer? Include guest-order sales in the sales total, but exclude guests from
+    the customer count.
+  keys: []
+  unit: gbp
+  months:
+  - 2011-05
+  - 2011-05
+  truth_sql: "WITH sales AS (\n  SELECT COALESCE(SUM(amount), 0) AS gross_sales\n\
+    \  FROM truth_lines\n  WHERE month = '2011-05'\n    AND line_type = 'product'\n\
+    ),\ncustomers AS (\n  SELECT COUNT(DISTINCT buyer_id) AS customer_count\n  FROM\
+    \ truth_lines\n  WHERE month = '2011-05'\n    AND line_type = 'product'\n    AND\
+    \ buyer_id IS NOT NULL\n)\nSELECT gross_sales / NULLIF(customer_count, 0) AS value\n\
+    FROM sales CROSS JOIN customers\n"
+  notes: Divides all product sales, including guest orders, by distinct active customer
+    numbers.
+- qid: R-L12
+  set: R
+  author: luna
+  lang: zh
+  question: 2011年1月至6月英国市场累计净产品销售额是多少英镑？
+  keys: []
+  unit: gbp
+  months:
+  - 2011-01
+  - 2011-06
+  truth_sql: "SELECT\n  COALESCE(SUM(CASE WHEN line_type = 'product' THEN amount ELSE\
+    \ 0 END), 0)\n  - COALESCE(SUM(CASE WHEN line_type = 'cancellation' THEN ABS(amount)\
+    \ ELSE 0 END), 0) AS value\nFROM truth_lines\nWHERE month BETWEEN '2011-01' AND\
+    \ '2011-06'\n  AND market = 'UK'\n"
+  notes: 累计净销售额等于期间产品销售总额减去期间取消金额（按正数计）。
+- qid: R-L13
+  set: R
+  author: luna
+  lang: en
+  question: In April 2011, how many product units were sold per order on average?
+  keys: []
+  unit: other
+  months:
+  - 2011-04
+  - 2011-04
+  truth_sql: "WITH totals AS (\n  SELECT SUM(qty) AS units_sold,\n         COUNT(DISTINCT\
+    \ order_no) AS order_count\n  FROM truth_lines\n  WHERE month = '2011-04'\n  \
+    \  AND line_type = 'product'\n)\nSELECT units_sold / NULLIF(order_count, 0) AS\
+    \ value\nFROM totals\n"
+  notes: Divides total product-line quantity by distinct orders containing product
+    lines.
+- qid: R-L14
+  set: R
+  author: luna
+  lang: en
+  question: For Q3 2010, what percentage of gross product sales came from each market?
+  keys:
+  - market
+  unit: percent
+  months:
+  - 2010-07
+  - 2010-09
+  truth_sql: "SELECT market,\n       100.0 * SUM(amount) / NULLIF(SUM(SUM(amount))\
+    \ OVER (), 0) AS value\nFROM truth_lines\nWHERE month BETWEEN '2010-07' AND '2010-09'\n\
+    \  AND line_type = 'product'\nGROUP BY market\nORDER BY market\n"
+  notes: Each market's share uses total gross product sales across both markets in
+    Q3 2024 as the denominator.
+- qid: R-L15
+  set: R
+  author: luna
+  lang: en
+  question: What was the UK cancellation rate in November 2011, as a percentage of
+    gross product sales?
+  keys: []
+  unit: percent
+  months:
+  - 2011-11
+  - 2011-11
+  truth_sql: "SELECT\n  100.0 * SUM(CASE WHEN line_type = 'cancellation' THEN ABS(amount)\
+    \ ELSE 0 END)\n  / NULLIF(SUM(CASE WHEN line_type = 'product' THEN amount ELSE\
+    \ 0 END), 0) AS value\nFROM truth_lines\nWHERE month = '2011-11'\n  AND market\
+    \ = 'UK'\n"
+  notes: Cancellation rate is positive cancellation value divided by gross product
+    sales for the same month and market.
+- qid: R-L16
+  set: R
+  author: luna
+  lang: zh
+  question: 2011年2月各市场的新客户分别有多少？只计有客户编号的客户。
+  keys:
+  - market
+  unit: count
+  months:
+  - 2011-02
+  - 2011-02
+  truth_sql: "WITH first_month AS (\n  SELECT buyer_id, MIN(month) AS first_product_month\n\
+    \  FROM truth_lines\n  WHERE line_type = 'product'\n    AND buyer_id IS NOT NULL\n\
+    \  GROUP BY buyer_id\n)\nSELECT t.market, COUNT(DISTINCT t.buyer_id) AS value\n\
+    FROM truth_lines t\nJOIN first_month f ON t.buyer_id = f.buyer_id\nWHERE t.month\
+    \ = '2011-02'\n  AND t.line_type = 'product'\n  AND f.first_product_month = '2011-02'\n\
+    GROUP BY t.market\nORDER BY t.market\n"
+  notes: 新客户是在全量数据中首次出现产品行的客户；按其2025年2月活跃市场分别计数。
+- qid: R-L17
+  set: R
+  author: luna
+  lang: en
+  question: How many repeat customers were active in May 2011? Count customers with
+    a product line in an earlier month, and exclude guests.
+  keys: []
+  unit: count
+  months:
+  - 2011-05
+  - 2011-05
+  truth_sql: "WITH first_month AS (\n  SELECT buyer_id, MIN(month) AS first_product_month\n\
+    \  FROM truth_lines\n  WHERE line_type = 'product'\n    AND buyer_id IS NOT NULL\n\
+    \  GROUP BY buyer_id\n)\nSELECT COUNT(DISTINCT t.buyer_id) AS value\nFROM truth_lines\
+    \ t\nJOIN first_month f ON t.buyer_id = f.buyer_id\nWHERE t.month = '2011-05'\n\
+    \  AND t.line_type = 'product'\n  AND t.buyer_id IS NOT NULL\n  AND f.first_product_month\
+    \ < '2011-05'\n"
+  notes: Repeat customers are active customers whose first product line was in an
+    earlier month.
+- qid: R-L18
+  set: R
+  author: luna
+  lang: en
+  question: How much did gross product sales change in percentage terms from Q2 to
+    Q3 2011? Use Q2 as the base.
+  keys: []
+  unit: percent
+  months:
+  - 2011-04
+  - 2011-09
+  truth_sql: "WITH quarterly AS (\n  SELECT\n    CASE WHEN month BETWEEN '2011-04'\
+    \ AND '2011-06' THEN 'Q2'\n         ELSE 'Q3' END AS quarter,\n    SUM(amount)\
+    \ AS gross_sales\n  FROM truth_lines\n  WHERE month BETWEEN '2011-04' AND '2011-09'\n\
+    \    AND line_type = 'product'\n  GROUP BY quarter\n)\nSELECT\n  100.0 * (MAX(CASE\
+    \ WHEN quarter = 'Q3' THEN gross_sales END)\n         / NULLIF(MAX(CASE WHEN quarter\
+    \ = 'Q2' THEN gross_sales END), 0) - 1) AS value\nFROM quarterly\n"
+  notes: Percentage change is (Q3 gross sales / Q2 gross sales - 1) × 100, across
+    all markets.
+- qid: R-L19
+  set: R
+  author: luna
+  lang: en
+  question: What share of active customers in October 2010 were repeat customers?
+    Exclude guests and give the result as a percentage.
+  keys: []
+  unit: percent
+  months:
+  - 2010-10
+  - 2010-10
+  truth_sql: "WITH first_month AS (\n  SELECT buyer_id, MIN(month) AS first_product_month\n\
+    \  FROM truth_lines\n  WHERE line_type = 'product'\n    AND buyer_id IS NOT NULL\n\
+    \  GROUP BY buyer_id\n),\nactive AS (\n  SELECT DISTINCT buyer_id\n  FROM truth_lines\n\
+    \  WHERE month = '2010-10'\n    AND line_type = 'product'\n    AND buyer_id IS\
+    \ NOT NULL\n)\nSELECT\n  100.0 * COUNT(*) FILTER (WHERE f.first_product_month\
+    \ < '2010-10')\n  / NULLIF(COUNT(*), 0) AS value\nFROM active a\nJOIN first_month\
+    \ f ON a.buyer_id = f.buyer_id\n"
+  notes: Repeat-customer share is repeat active customers divided by all active customers
+    that month.
+- qid: R-L20
+  set: R
+  author: luna
+  lang: en
+  question: In Q4 2010, what were net product sales per order in non-UK markets, in
+    GBP? Count orders with product lines.
+  keys: []
+  unit: gbp
+  months:
+  - 2010-10
+  - 2010-12
+  truth_sql: "WITH totals AS (\n  SELECT\n    COALESCE(SUM(CASE WHEN line_type = 'product'\
+    \ THEN amount ELSE 0 END), 0)\n    - COALESCE(SUM(CASE WHEN line_type = 'cancellation'\
+    \ THEN ABS(amount) ELSE 0 END), 0) AS net_sales,\n    COUNT(DISTINCT CASE WHEN\
+    \ line_type = 'product' THEN order_no END) AS order_count\n  FROM truth_lines\n\
+    \  WHERE month BETWEEN '2010-10' AND '2010-12'\n    AND market = 'non-UK'\n)\n\
+    SELECT net_sales / NULLIF(order_count, 0) AS value\nFROM totals\n"
+  notes: Divides Q4 non-UK net product sales by distinct orders containing product
+    lines in that period.
+- qid: R-H01
+  set: R
+  author: haiku
+  lang: en
+  question: What were our gross product sales in GBP for UK customers in February
+    2011?
+  keys: []
+  unit: gbp
+  months:
+  - 2011-02
+  - 2011-02
+  truth_sql: 'SELECT ROUND(SUM(amount), 2) AS value
+
+    FROM truth_lines
+
+    WHERE line_type = ''product'' AND market = ''UK'' AND month = ''2011-02'';
+
+    '
+  notes: Official gross product sales (product lines only, before cancellations),
+    UK market slice.
+  dropped: same truth as R-L01
+- qid: R-H02
+  set: R
+  author: haiku
+  lang: en
+  question: Give me net product sales in GBP for each market over Q3 2010, net of
+    cancellations.
+  keys:
+  - market
+  unit: gbp
+  months:
+  - 2010-07
+  - 2010-09
+  truth_sql: "SELECT market,\n       ROUND(SUM(CASE WHEN line_type = 'product' THEN\
+    \ amount\n                      WHEN line_type = 'cancellation' THEN amount END),\
+    \ 2) AS value\nFROM truth_lines\nWHERE line_type IN ('product', 'cancellation')\n\
+    \  AND month BETWEEN '2010-07' AND '2010-09'\nGROUP BY market\nORDER BY market;\n"
+  notes: Net = gross product sales minus cancelled value. Cancellation lines carry
+    negative amounts, so summing them with product lines gives net directly. Q3 =
+    Jul to Sep 2024, computed as one period over the whole quarter.
+- qid: R-H03
+  set: R
+  author: haiku
+  lang: en
+  question: What was our cancellation rate in June 2011 across all markets? Give it
+    as a share between 0 and 1, not a percentage.
+  keys: []
+  unit: share
+  months:
+  - 2011-06
+  - 2011-06
+  truth_sql: "SELECT -SUM(CASE WHEN line_type = 'cancellation' THEN amount END)::DOUBLE\n\
+    \       / SUM(CASE WHEN line_type = 'product' THEN amount END)::DOUBLE AS value\n\
+    FROM truth_lines\nWHERE month = '2011-06'"
+  notes: 'Official cancellation rate: cancelled value (positive) divided by gross
+    product sales, same month, all markets. Rounded to 4 decimals.'
+  truth_fixed: designer review, see REVIEW.md
+- qid: R-H04
+  set: R
+  author: haiku
+  lang: en
+  question: What was the average order value in GBP for non-UK orders in Q1 2011?
+    Use gross product sales over the number of orders.
+  keys: []
+  unit: gbp
+  months:
+  - 2011-01
+  - 2011-03
+  truth_sql: "SELECT ROUND(SUM(CASE WHEN line_type = 'product' THEN amount END)\n\
+    \             / COUNT(DISTINCT CASE WHEN line_type = 'product' THEN order_no END),\
+    \ 2) AS value\nFROM truth_lines\nWHERE market = 'non-UK' AND month BETWEEN '2011-01'\
+    \ AND '2011-03';\n"
+  notes: 'Official average order value for the non-UK market, computed on the whole
+    quarter: total gross product sales over distinct orders with a product line, not
+    an average of monthly figures.'
+- qid: R-H05
+  set: R
+  author: haiku
+  lang: en
+  question: How many units did we sell in each month of 2010?
+  keys:
+  - month
+  unit: count
+  months:
+  - 2010-01
+  - 2010-12
+  truth_sql: 'SELECT month, SUM(qty) AS value
+
+    FROM truth_lines
+
+    WHERE line_type = ''product'' AND month BETWEEN ''2010-01'' AND ''2010-12''
+
+    GROUP BY month
+
+    ORDER BY month;
+
+    '
+  notes: 'Official units sold: quantity summed over product lines only. Cancellations
+    and fees are excluded.'
+- qid: R-H06
+  set: R
+  author: haiku
+  lang: en
+  question: How many active customers did we have in September 2011, broken down by
+    market?
+  keys:
+  - market
+  unit: count
+  months:
+  - 2011-09
+  - 2011-09
+  truth_sql: 'SELECT market, COUNT(DISTINCT buyer_id) AS value
+
+    FROM truth_lines
+
+    WHERE line_type = ''product'' AND buyer_id IS NOT NULL AND month = ''2011-09''
+
+    GROUP BY market
+
+    ORDER BY market;
+
+    '
+  notes: 'Official active customers: distinct customer numbers with a product line
+    in the month. Guest orders are excluded. A customer with lines in both markets
+    in the same month would be counted under each, so the market rows may not sum
+    to the total. The question asks for the breakdown, so this is accepted.'
+- qid: R-H07
+  set: R
+  author: haiku
+  lang: en
+  question: Show me the month-over-month percentage change in gross product sales
+    for each month of 2011 through November, as a percent (for example, 12.5 means
+    up 12.5%).
+  keys:
+  - month
+  unit: percent
+  months:
+  - 2011-01
+  - 2011-11
+  truth_sql: "WITH m AS (\n  SELECT month, SUM(amount)::DOUBLE AS g\n  FROM truth_lines\n\
+    \  WHERE line_type = 'product'\n  GROUP BY month\n),\nw AS (\n  SELECT month,\
+    \ g, LAG(g) OVER (ORDER BY month) AS prev\n  FROM m\n)\nSELECT month, 100 * (g\
+    \ - prev) / prev AS value\nFROM w\nWHERE month BETWEEN '2011-01' AND '2011-11'\n\
+    ORDER BY month"
+  notes: Growth percentage for each month versus the previous month. LAG runs before
+    the month filter so January 2025 compares against December 2024. Percent is given
+    as a number, not a fraction.
+  truth_fixed: designer review, see REVIEW.md
+- qid: R-H08
+  set: R
+  author: haiku
+  lang: zh
+  question: 2011年1月到11月，英国客户的毛产品销售额占全部毛产品销售额的比例是多少？请给出0到1之间的小数，不要用百分比。
+  keys: []
+  unit: share
+  months:
+  - 2011-01
+  - 2011-11
+  truth_sql: 'SELECT ROUND(SUM(CASE WHEN market = ''UK'' THEN amount END) / SUM(amount),
+    4) AS value
+
+    FROM truth_lines
+
+    WHERE line_type = ''product'' AND month BETWEEN ''2011-01'' AND ''2011-11'';
+
+    '
+  notes: UK share of gross product sales over the period, as a share. Gross sales
+    are used, not net, so the question does not depend on cancellations.
+- qid: R-H09
+  set: R
+  author: haiku
+  lang: en
+  question: What were our five best-selling products in 2010 by gross product sales
+    in GBP? Give the item codes and their sales.
+  keys:
+  - sku
+  unit: gbp
+  months:
+  - 2010-01
+  - 2010-12
+  truth_sql: 'SELECT sku, ROUND(SUM(amount), 2) AS value
+
+    FROM truth_lines
+
+    WHERE line_type = ''product'' AND month BETWEEN ''2010-01'' AND ''2010-12''
+
+    GROUP BY sku
+
+    ORDER BY value DESC
+
+    LIMIT 5;
+
+    '
+  notes: Top 5 SKUs by gross product sales in calendar 2024. Ranking is by gross sales,
+    not units or net. No ties are expected in the top five.
+- qid: R-H10
+  set: R
+  author: haiku
+  lang: en
+  question: For June to August 2011, what share of gross product sales came from guest
+    orders (no customer number) in each market? Give shares between 0 and 1.
+  keys:
+  - market
+  unit: share
+  months:
+  - 2011-06
+  - 2011-08
+  truth_sql: "SELECT market,\n       ROUND(COALESCE(SUM(CASE WHEN buyer_id IS NULL\
+    \ THEN amount END), 0) / SUM(amount), 4) AS value\nFROM truth_lines\nWHERE line_type\
+    \ = 'product' AND month BETWEEN '2011-06' AND '2011-08'\nGROUP BY market\nORDER\
+    \ BY market;\n"
+  notes: Guest share of gross product sales, computed on the whole period per market.
+    Guest orders are lines with no customer number. They count in sales but not in
+    customers.
+- qid: R-H11
+  set: R
+  author: haiku
+  lang: zh
+  question: 2011年1月到11月，英国市场的平均订单金额（毛产品销售额除以订单数）是非英国市场的几倍？请保留三位小数。
+  keys: []
+  unit: other
+  months:
+  - 2011-01
+  - 2011-11
+  truth_sql: "WITH a AS (\n  SELECT market,\n         SUM(amount)::DOUBLE / COUNT(DISTINCT\
+    \ order_no) AS aov\n  FROM truth_lines\n  WHERE line_type = 'product' AND month\
+    \ BETWEEN '2011-01' AND '2011-11'\n  GROUP BY market\n)\nSELECT (SELECT aov FROM\
+    \ a WHERE market = 'UK') / (SELECT aov FROM a WHERE market = 'non-UK') AS value"
+  notes: Ratio of the official average order value for UK to non-UK over the whole
+    period. Both averages are recomputed from period totals. The answer is a plain
+    multiple (for example 1.250), not a percent.
+  truth_fixed: designer review, see REVIEW.md
+- qid: R-H12
+  set: R
+  author: haiku
+  lang: en
+  question: Give me the cumulative net product sales in GBP for 2010, month by month,
+    starting from January 2010.
+  keys:
+  - month
+  unit: gbp
+  months:
+  - 2010-01
+  - 2010-12
+  truth_sql: "WITH m AS (\n  SELECT month, SUM(amount) AS net\n  FROM truth_lines\n\
+    \  WHERE line_type IN ('product', 'cancellation')\n    AND month BETWEEN '2010-01'\
+    \ AND '2010-12'\n  GROUP BY month\n)\nSELECT month,\n       ROUND(SUM(net) OVER\
+    \ (ORDER BY month ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW), 2) AS value\n\
+    FROM m\nORDER BY month;\n"
+  notes: Running total of official net product sales from January 2024. The filter
+    sits inside the CTE so December 2023 is not included in the running sum.
+- qid: R-H13
+  set: R
+  author: haiku
+  lang: en
+  question: In Q1 2011, how much did an average active customer spend in GBP each
+    month? Count only customers with a customer number, and use their gross product
+    sales.
+  keys:
+  - month
+  unit: gbp
+  months:
+  - 2011-01
+  - 2011-03
+  truth_sql: "SELECT month,\n       ROUND(SUM(amount) / COUNT(DISTINCT buyer_id),\
+    \ 2) AS value\nFROM truth_lines\nWHERE line_type = 'product' AND buyer_id IS NOT\
+    \ NULL AND month BETWEEN '2011-01' AND '2011-03'\nGROUP BY month\nORDER BY month;\n"
+  notes: Gross product sales from customers with a customer number, divided by active
+    customers in each month. Guest sales are excluded from both numerator and denominator
+    so the figure is consistent.
+- qid: R-H14
+  set: R
+  author: haiku
+  lang: zh
+  question: 2011年1月到11月的毛产品销售额，比2010年1月到11月同期增长了百分之多少？请给出百分比数字，例如12.5表示增长12.5%。
+  keys: []
+  unit: percent
+  months:
+  - 2010-01
+  - 2011-11
+  truth_sql: "WITH y AS (\n  SELECT substr(month, 1, 4) AS yr, SUM(amount)::DOUBLE\
+    \ AS g\n  FROM truth_lines\n  WHERE line_type = 'product'\n    AND ((month BETWEEN\
+    \ '2010-01' AND '2010-11') OR (month BETWEEN '2011-01' AND '2011-11'))\n  GROUP\
+    \ BY yr\n)\nSELECT 100 * ((SELECT g FROM y WHERE yr = '2011') - (SELECT g FROM\
+    \ y WHERE yr = '2010'))\n       / (SELECT g FROM y WHERE yr = '2010') AS value"
+  notes: Year-over-year growth in gross product sales, comparing January to November
+    2025 with the same months of 2024. December 2024 is excluded from the base. Percent
+    is given as a number.
+  truth_fixed: designer review, see REVIEW.md
+- qid: R-H15
+  set: R
+  author: haiku
+  lang: en
+  question: What was the cancellation rate in Q4 2010 for each market? Give shares
+    between 0 and 1.
+  keys:
+  - market
+  unit: share
+  months:
+  - 2010-10
+  - 2010-12
+  truth_sql: "SELECT market,\n       -SUM(CASE WHEN line_type = 'cancellation' THEN\
+    \ amount END)::DOUBLE\n       / SUM(CASE WHEN line_type = 'product' THEN amount\
+    \ END)::DOUBLE AS value\nFROM truth_lines\nWHERE month BETWEEN '2010-10' AND '2010-12'\n\
+    GROUP BY market\nORDER BY market"
+  notes: 'Official cancellation rate by market for the whole quarter: cancelled value
+    over gross product sales, both taken over the period.'
+  truth_fixed: designer review, see REVIEW.md
+- qid: R-H16
+  set: R
+  author: haiku
+  lang: en
+  question: How many brand-new customers did we win in November 2010? A new customer
+    is one whose first purchase with us was that month.
+  keys: []
+  unit: count
+  months:
+  - 2010-11
+  - 2010-11
+  truth_sql: "WITH f AS (\n  SELECT buyer_id, MIN(month) AS first_month\n  FROM truth_lines\n\
+    \  WHERE line_type = 'product' AND buyer_id IS NOT NULL\n  GROUP BY buyer_id\n\
+    )\nSELECT COUNT(*) AS value\nFROM f\nWHERE first_month = '2010-11';\n"
+  notes: 'Official new customers: active customers whose first product line in the
+    whole data falls in this month. Since first_month is the earliest product month
+    for each customer across the full data, a first_month of 2024-11 is exactly a
+    new customer in November 2024.'
+- qid: R-H17
+  set: R
+  author: haiku
+  lang: en
+  question: How many repeat customers did we have in March 2011? A repeat customer
+    is one who also bought from us in an earlier month.
+  keys: []
+  unit: count
+  months:
+  - 2011-03
+  - 2011-03
+  truth_sql: "SELECT COUNT(DISTINCT a.buyer_id) AS value\nFROM truth_lines a\nWHERE\
+    \ a.line_type = 'product'\n  AND a.buyer_id IS NOT NULL\n  AND a.month = '2011-03'\n\
+    \  AND EXISTS (\n    SELECT 1\n    FROM truth_lines b\n    WHERE b.buyer_id =\
+    \ a.buyer_id\n      AND b.line_type = 'product'\n      AND b.month < '2011-03'\n\
+    \  );\n"
+  notes: 'Official repeat customers: active customers in March 2025 who had a product
+    line in any earlier month in the data. Customers with a first purchase in March
+    are excluded.'
+- qid: R-H18
+  set: R
+  author: haiku
+  lang: en
+  question: Show me gross product sales in GBP for non-UK customers in each month
+    of Q4 2010.
+  keys:
+  - month
+  unit: gbp
+  months:
+  - 2010-10
+  - 2010-12
+  truth_sql: 'SELECT month, ROUND(SUM(amount), 2) AS value
+
+    FROM truth_lines
+
+    WHERE line_type = ''product'' AND market = ''non-UK'' AND month BETWEEN ''2010-10''
+    AND ''2010-12''
+
+    GROUP BY month
+
+    ORDER BY month;
+
+    '
+  notes: Official gross product sales by month, restricted to the non-UK market.
+- qid: R-H19
+  set: R
+  author: haiku
+  lang: en
+  question: What was the total value of cancellations in GBP for UK orders in August
+    2011? Give it as a positive number.
+  keys: []
+  unit: gbp
+  months:
+  - 2011-08
+  - 2011-08
+  truth_sql: 'SELECT ROUND(-SUM(amount), 2) AS value
+
+    FROM truth_lines
+
+    WHERE line_type = ''cancellation'' AND market = ''UK'' AND month = ''2011-08'';
+
+    '
+  notes: 'Official cancelled value: the value of cancellation lines as a positive
+    amount, booked in the month of the cancellation line. Cancellation amounts are
+    negative, so the sign is flipped.'
+- qid: R-H20
+  set: R
+  author: haiku
+  lang: en
+  question: How many distinct orders did we get in each month of the first half of
+    2011, split between UK and non-UK?
+  keys:
+  - month
+  - market
+  unit: count
+  months:
+  - 2011-01
+  - 2011-06
+  truth_sql: 'SELECT month, market, COUNT(DISTINCT order_no) AS value
+
+    FROM truth_lines
+
+    WHERE line_type = ''product'' AND month BETWEEN ''2011-01'' AND ''2011-06''
+
+    GROUP BY month, market
+
+    ORDER BY month, market;
+
+    '
+  notes: 'Official orders: distinct order numbers with at least one product line,
+    counted within each month and market. Guest orders are included since they count
+    as orders.'
+- qid: R-L21
+  set: R
+  author: luna
+  lang: en
+  question: How much were gross product sales in the UK in February 2011, in GBP?
+  keys: []
+  unit: gbp
+  months:
+  - 2011-02
+  - 2011-02
+  truth_sql: "SELECT COALESCE(SUM(amount), 0) AS value\nFROM truth_lines\nWHERE month\
+    \ = '2011-02'\n  AND market = 'UK'\n  AND line_type = 'product'\n"
+  notes: Gross sales include product lines only; cancellations are excluded.
+  dropped: same truth as R-L01
+- qid: R-L22
+  set: R
+  author: luna
+  lang: en
+  question: What were net product sales across all markets in Q1 2011, in GBP?
+  keys: []
+  unit: gbp
+  months:
+  - 2011-01
+  - 2011-03
+  truth_sql: "SELECT COALESCE(SUM(CASE WHEN line_type = 'product' THEN amount ELSE\
+    \ 0 END), 0)\n     - COALESCE(SUM(CASE WHEN line_type = 'cancellation' THEN -amount\
+    \ ELSE 0 END), 0) AS value\nFROM truth_lines\nWHERE month BETWEEN '2011-01' AND\
+    \ '2011-03'\n"
+  notes: Net sales are gross product sales minus positive cancellation value, booked
+    in the cancellation month.
+- qid: R-L23
+  set: R
+  author: luna
+  lang: en
+  question: How many distinct orders had at least one product line in non-UK markets
+    from April through June 2011?
+  keys: []
+  unit: count
+  months:
+  - 2011-04
+  - 2011-06
+  truth_sql: "SELECT COUNT(DISTINCT order_no) AS value\nFROM truth_lines\nWHERE month\
+    \ BETWEEN '2011-04' AND '2011-06'\n  AND market = 'non-UK'\n  AND line_type =\
+    \ 'product'\n"
+  notes: Counts each order once across the whole period, including guest orders.
+- qid: R-L24
+  set: R
+  author: luna
+  lang: en
+  question: What was the average order value for UK orders in June 2011, in GBP?
+  keys: []
+  unit: gbp
+  months:
+  - 2011-06
+  - 2011-06
+  truth_sql: "SELECT\n  COALESCE(SUM(amount), 0) / NULLIF(COUNT(DISTINCT order_no),\
+    \ 0) AS value\nFROM truth_lines\nWHERE month = '2011-06'\n  AND market = 'UK'\n\
+    \  AND line_type = 'product'\n"
+  notes: Uses gross product sales divided by distinct orders with a product line;
+    cancellations are excluded.
+- qid: R-L25
+  set: R
+  author: luna
+  lang: en
+  question: How many product units were sold in September 2011, split between the
+    UK and non-UK markets?
+  keys:
+  - market
+  unit: count
+  months:
+  - 2011-09
+  - 2011-09
+  truth_sql: "SELECT market, SUM(qty) AS value\nFROM truth_lines\nWHERE month = '2011-09'\n\
+    \  AND line_type = 'product'\nGROUP BY market\n"
+  notes: Units sold sum quantities from product lines only.
+- qid: R-L26
+  set: R
+  author: luna
+  lang: en
+  question: How many active customers were in the United Kingdom in March 2011?
+  keys: []
+  unit: count
+  months:
+  - 2011-03
+  - 2011-03
+  truth_sql: "SELECT COUNT(DISTINCT buyer_id) AS value\nFROM truth_lines\nWHERE month\
+    \ = '2011-03'\n  AND country = 'United Kingdom'\n  AND line_type = 'product'\n\
+    \  AND buyer_id IS NOT NULL\n"
+  notes: Active customers must have a product line; guest orders do not count as customers.
+- qid: R-L27
+  set: R
+  author: luna
+  lang: en
+  question: By what percentage did UK net product sales change from January to February
+    2011? Use January as the base.
+  keys: []
+  unit: percent
+  months:
+  - 2011-01
+  - 2011-02
+  truth_sql: "WITH monthly AS (\n  SELECT\n    month,\n    SUM(CASE WHEN line_type\
+    \ = 'product' THEN amount ELSE 0 END)\n      - SUM(CASE WHEN line_type = 'cancellation'\
+    \ THEN -amount ELSE 0 END) AS net_sales\n  FROM truth_lines\n  WHERE month BETWEEN\
+    \ '2011-01' AND '2011-02'\n    AND market = 'UK'\n  GROUP BY month\n)\nSELECT\n\
+    \  100.0 * (\n    MAX(CASE WHEN month = '2011-02' THEN net_sales END)\n    / NULLIF(MAX(CASE\
+    \ WHEN month = '2011-01' THEN net_sales END), 0) - 1\n  ) AS value\nFROM monthly\n"
+  notes: Percentage change is (February net sales / January net sales - 1) × 100.
+- qid: R-L28
+  set: R
+  author: luna
+  lang: en
+  question: What share of gross product sales in Q2 2011 came from non-UK markets?
+    Give the answer as a share from 0 to 1.
+  keys: []
+  unit: share
+  months:
+  - 2011-04
+  - 2011-06
+  truth_sql: "SELECT\n  SUM(CASE WHEN market = 'non-UK' THEN amount ELSE 0 END)\n\
+    \    / NULLIF(SUM(amount), 0) AS value\nFROM truth_lines\nWHERE month BETWEEN\
+    \ '2011-04' AND '2011-06'\n  AND line_type = 'product'\n"
+  notes: The denominator is gross product sales across all markets for the full quarter.
+- qid: R-L29
+  set: R
+  author: luna
+  lang: en
+  question: What was the average order value in August 2011, in GBP, for each market?
+  keys:
+  - market
+  unit: gbp
+  months:
+  - 2011-08
+  - 2011-08
+  truth_sql: "SELECT\n  market,\n  SUM(amount) / NULLIF(COUNT(DISTINCT order_no),\
+    \ 0) AS value\nFROM truth_lines\nWHERE month = '2011-08'\n  AND line_type = 'product'\n\
+    GROUP BY market\n"
+  notes: For each market, average order value is gross product sales divided by distinct
+    orders with a product line.
+  dropped: same truth as R-L09
+- qid: R-L30
+  set: R
+  author: luna
+  lang: en
+  question: Which five item codes had the highest gross product sales in Q3 2011,
+    and how much did each sell in GBP?
+  keys:
+  - sku
+  unit: gbp
+  months:
+  - 2011-07
+  - 2011-09
+  truth_sql: "SELECT sku, SUM(amount) AS value\nFROM truth_lines\nWHERE month BETWEEN\
+    \ '2011-07' AND '2011-09'\n  AND line_type = 'product'\nGROUP BY sku\nORDER BY\
+    \ value DESC, sku\nLIMIT 5\n"
+  notes: Ranks item codes by gross product sales over the full quarter; ties are ordered
+    by item code.
+- qid: R-L31
+  set: R
+  author: luna
+  lang: en
+  question: What were UK net product sales per active customer across October to December
+    2010, in GBP? Include guest sales in net sales, but count only customers with
+    a customer number in the denominator.
+  keys: []
+  unit: gbp
+  months:
+  - 2010-10
+  - 2010-12
+  truth_sql: "SELECT\n  (\n    SUM(CASE WHEN line_type = 'product' THEN amount ELSE\
+    \ 0 END)\n    - SUM(CASE WHEN line_type = 'cancellation' THEN -amount ELSE 0 END)\n\
+    \  ) / NULLIF(COUNT(DISTINCT CASE WHEN line_type = 'product' THEN buyer_id END),\
+    \ 0) AS value\nFROM truth_lines\nWHERE month BETWEEN '2010-10' AND '2010-12'\n\
+    \  AND market = 'UK'\n"
+  notes: Numerator includes guest product sales and cancellations; denominator is
+    distinct non-null customers with a product line anywhere in the period.
+- qid: R-L32
+  set: R
+  author: luna
+  lang: en
+  question: What was cumulative gross product sales by month through Q1 2011, in GBP?
+  keys:
+  - month
+  unit: gbp
+  months:
+  - 2011-01
+  - 2011-03
+  truth_sql: "WITH monthly AS (\n  SELECT month, SUM(amount) AS gross_sales\n  FROM\
+    \ truth_lines\n  WHERE month BETWEEN '2011-01' AND '2011-03'\n    AND line_type\
+    \ = 'product'\n  GROUP BY month\n)\nSELECT\n  month,\n  SUM(gross_sales) OVER\
+    \ (ORDER BY month ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS value\n\
+    FROM monthly\n"
+  notes: Each month shows the running total from January through that month; cancellations
+    are excluded.
+  dropped: 'two readings: the running total''s start is not stated (January 2025 gives
+    0.67M, the start of the data 10.8M)'
+- qid: R-L33
+  set: R
+  author: luna
+  lang: en
+  question: How many product units were sold per order in July 2011, split by market?
+  keys:
+  - market
+  unit: other
+  months:
+  - 2011-07
+  - 2011-07
+  truth_sql: "SELECT\n  market,\n  SUM(qty) / NULLIF(COUNT(DISTINCT order_no), 0)\
+    \ AS value\nFROM truth_lines\nWHERE month = '2011-07'\n  AND line_type = 'product'\n\
+    GROUP BY market\n"
+  notes: Divides total product units by distinct orders with a product line in each
+    market.
+- qid: R-L34
+  set: R
+  author: luna
+  lang: en
+  question: For each month in Q1 2011, what share of the quarter's gross product sales
+    did that month contribute? Give the answer as a percent.
+  keys:
+  - month
+  unit: percent
+  months:
+  - 2011-01
+  - 2011-03
+  truth_sql: "WITH monthly AS (\n  SELECT month, SUM(amount) AS gross_sales\n  FROM\
+    \ truth_lines\n  WHERE month BETWEEN '2011-01' AND '2011-03'\n    AND line_type\
+    \ = 'product'\n  GROUP BY month\n)\nSELECT\n  month,\n  100.0 * gross_sales /\
+    \ NULLIF(SUM(gross_sales) OVER (), 0) AS value\nFROM monthly\n"
+  notes: Each month's gross product sales are divided by total gross product sales
+    for the quarter.
+- qid: R-L35
+  set: R
+  author: luna
+  lang: en
+  question: How much cancellation value was booked in each month of Q4 2010, in GBP?
+  keys:
+  - month
+  unit: gbp
+  months:
+  - 2010-10
+  - 2010-12
+  truth_sql: "SELECT month, SUM(-amount) AS value\nFROM truth_lines\nWHERE month BETWEEN\
+    \ '2010-10' AND '2010-12'\n  AND line_type = 'cancellation'\nGROUP BY month\n"
+  notes: Cancellation value is reported as a positive amount in the cancellation line's
+    month.
+- qid: R-L36
+  set: R
+  author: luna
+  lang: en
+  question: How many new customers were active in January 2011?
+  keys: []
+  unit: count
+  months:
+  - 2011-01
+  - 2011-01
+  truth_sql: "WITH first_product_month AS (\n  SELECT buyer_id, MIN(month) AS first_month\n\
+    \  FROM truth_lines\n  WHERE line_type = 'product'\n    AND buyer_id IS NOT NULL\n\
+    \  GROUP BY buyer_id\n)\nSELECT COUNT(*) AS value\nFROM first_product_month\n\
+    WHERE first_month = '2011-01'\n"
+  notes: New customers are non-null customer numbers whose first product line in the
+    full data is in January 2025.
+- qid: R-L37
+  set: R
+  author: luna
+  lang: en
+  question: How many repeat customers were active in April 2011?
+  keys: []
+  unit: count
+  months:
+  - 2011-04
+  - 2011-04
+  truth_sql: "WITH customer_months AS (\n  SELECT DISTINCT buyer_id, month\n  FROM\
+    \ truth_lines\n  WHERE line_type = 'product'\n    AND buyer_id IS NOT NULL\n)\n\
+    SELECT COUNT(DISTINCT current_month.buyer_id) AS value\nFROM customer_months AS\
+    \ current_month\nWHERE current_month.month = '2011-04'\n  AND EXISTS (\n    SELECT\
+    \ 1\n    FROM customer_months AS earlier_month\n    WHERE earlier_month.buyer_id\
+    \ = current_month.buyer_id\n      AND earlier_month.month < current_month.month\n\
+    \  )\n"
+  notes: Repeat customers are customers with a product line in April and a product
+    line in any earlier month.
+- qid: R-L38
+  set: R
+  author: luna
+  lang: zh
+  question: 2011年10月的取消金额比2011年9月多多少英镑？如果10月金额更少，结果可以为负。
+  keys: []
+  unit: gbp
+  months:
+  - 2011-09
+  - 2011-10
+  truth_sql: "SELECT\n  COALESCE(SUM(CASE WHEN month = '2011-10' THEN -amount ELSE\
+    \ 0 END), 0)\n    - COALESCE(SUM(CASE WHEN month = '2011-09' THEN -amount ELSE\
+    \ 0 END), 0) AS value\nFROM truth_lines\nWHERE month IN ('2011-09', '2011-10')\n\
+    \  AND line_type = 'cancellation'\n"
+  notes: 计算10月取消金额减去9月取消金额；负数表示10月更少。
+- qid: R-L39
+  set: R
+  author: luna
+  lang: zh
+  question: 2011年6月的新客户占活跃客户的比例是多少？请用百分比表示。
+  keys: []
+  unit: percent
+  months:
+  - 2011-06
+  - 2011-06
+  truth_sql: "WITH first_product_month AS (\n  SELECT buyer_id, MIN(month) AS first_month\n\
+    \  FROM truth_lines\n  WHERE line_type = 'product'\n    AND buyer_id IS NOT NULL\n\
+    \  GROUP BY buyer_id\n),\nactive AS (\n  SELECT DISTINCT buyer_id\n  FROM truth_lines\n\
+    \  WHERE month = '2011-06'\n    AND line_type = 'product'\n    AND buyer_id IS\
+    \ NOT NULL\n)\nSELECT\n  100.0 * COUNT(CASE WHEN first_product_month.first_month\
+    \ = '2011-06' THEN active.buyer_id END)\n    / NULLIF(COUNT(active.buyer_id),\
+    \ 0) AS value\nFROM active\nJOIN first_product_month USING (buyer_id)\n"
+  notes: 分子为6月首次购买的活跃客户，分母为6月所有非空客户编号的活跃客户。
+- qid: R-L40
+  set: R
+  author: luna
+  lang: zh
+  question: 2011年第三季度，英国和非英国市场的毛产品销售额各占季度总额的百分之多少？
+  keys:
+  - market
+  unit: percent
+  months:
+  - 2011-07
+  - 2011-09
+  truth_sql: "SELECT\n  market,\n  100.0 * SUM(amount) / NULLIF(SUM(SUM(amount)) OVER\
+    \ (), 0) AS value\nFROM truth_lines\nWHERE month BETWEEN '2011-07' AND '2011-09'\n\
+    \  AND line_type = 'product'\nGROUP BY market\n"
+  notes: 每个市场的毛产品销售额除以全市场当季毛产品销售总额。
+- qid: R-H21
+  set: R
+  author: haiku
+  lang: en
+  question: What was our gross product sales in GBP for each market in Q3 2011 (July
+    to September)? I want UK and non-UK shown separately.
+  keys:
+  - market
+  unit: gbp
+  months:
+  - 2011-07
+  - 2011-09
+  truth_sql: 'SELECT market, SUM(amount) AS value
+
+    FROM truth_lines
+
+    WHERE line_type = ''product'' AND month BETWEEN ''2011-07'' AND ''2011-09''
+
+    GROUP BY market
+
+    ORDER BY market;
+
+    '
+  notes: Gross product sales = sum of product-line amounts, before cancellations.
+    Market taken from the line.
+- qid: R-H22
+  set: R
+  author: haiku
+  lang: en
+  question: How many orders did we take in March 2011? Only count orders that contain
+    actual products, not fees, adjustments or vouchers.
+  keys: []
+  unit: count
+  months:
+  - 2011-03
+  - 2011-03
+  truth_sql: 'SELECT COUNT(DISTINCT order_no) AS value
+
+    FROM truth_lines
+
+    WHERE line_type = ''product'' AND month = ''2011-03'';
+
+    '
+  notes: Orders = distinct order numbers with at least one product line in the month.
+- qid: R-H23
+  set: R
+  author: haiku
+  lang: en
+  question: What was our average order value for UK customers in November 2010, in
+    pounds?
+  keys: []
+  unit: gbp
+  months:
+  - 2010-11
+  - 2010-11
+  truth_sql: 'SELECT SUM(amount)::DOUBLE / COUNT(DISTINCT order_no) AS value
+
+    FROM truth_lines
+
+    WHERE line_type = ''product'' AND market = ''UK'' AND month = ''2010-11'';
+
+    '
+  notes: Gross product sales divided by orders, both UK only, recomputed from totals.
+    Guest orders included because they count in sales and orders.
+- qid: R-H24
+  set: R
+  author: haiku
+  lang: en
+  question: Give me total units sold per month across 2010.
+  keys:
+  - month
+  unit: count
+  months:
+  - 2010-01
+  - 2010-12
+  truth_sql: 'SELECT month, SUM(qty) AS value
+
+    FROM truth_lines
+
+    WHERE line_type = ''product'' AND month BETWEEN ''2010-01'' AND ''2010-12''
+
+    GROUP BY month
+
+    ORDER BY month;
+
+    '
+  notes: Units sold = sum of quantity on product lines. Cancellations and fees are
+    excluded.
+  dropped: same truth as R-H05
+- qid: R-H25
+  set: R
+  author: haiku
+  lang: en
+  question: How many active customers did we have each month in the first half of
+    2011? Guest orders don't count as customers.
+  keys:
+  - month
+  unit: count
+  months:
+  - 2011-01
+  - 2011-06
+  truth_sql: "SELECT month, COUNT(DISTINCT buyer_id) AS value\nFROM truth_lines\n\
+    WHERE line_type = 'product' AND buyer_id IS NOT NULL\n  AND month BETWEEN '2011-01'\
+    \ AND '2011-06'\nGROUP BY month\nORDER BY month;\n"
+  notes: Active customers = distinct customer numbers with a product line in the month.
+    Guest orders excluded.
+- qid: R-H26
+  set: R
+  author: haiku
+  lang: en
+  question: What was the cancellation rate for non-UK customers in June 2011? Give
+    it as a share between 0 and 1, not a percentage.
+  keys: []
+  unit: share
+  months:
+  - 2011-06
+  - 2011-06
+  truth_sql: "SELECT\n  (SELECT (-SUM(amount))::DOUBLE FROM truth_lines\n    WHERE\
+    \ line_type = 'cancellation' AND market = 'non-UK' AND month = '2011-06')\n  /\n\
+    \  (SELECT SUM(amount)::DOUBLE FROM truth_lines\n    WHERE line_type = 'product'\
+    \ AND market = 'non-UK' AND month = '2011-06')\n  AS value;\n"
+  notes: Cancelled value (positive) booked in June 2025 divided by gross product sales
+    in June 2025, non-UK only.
+- qid: R-H27
+  set: R
+  author: haiku
+  lang: en
+  question: By what percent did gross product sales grow in November 2011 compared
+    with November 2010? Give the percent number, for example 12.5 for 12.5 percent.
+  keys: []
+  unit: percent
+  months:
+  - 2010-11
+  - 2011-11
+  truth_sql: "WITH g AS (\n  SELECT month, SUM(amount)::DOUBLE AS gross\n  FROM truth_lines\n\
+    \  WHERE line_type = 'product' AND month IN ('2010-11', '2011-11')\n  GROUP BY\
+    \ month\n)\nSELECT (MAX(CASE WHEN month = '2011-11' THEN gross END)\n  / MAX(CASE\
+    \ WHEN month = '2010-11' THEN gross END) - 1) * 100 AS value\nFROM g;\n"
+  notes: Year-over-year growth on gross product sales, all markets, expressed on a
+    0-100 scale.
+- qid: R-H28
+  set: R
+  author: haiku
+  lang: en
+  question: What share of total gross product sales in calendar 2010 came from non-UK
+    customers? Give a share between 0 and 1, not a percentage.
+  keys: []
+  unit: share
+  months:
+  - 2010-01
+  - 2010-12
+  truth_sql: "SELECT SUM(CASE WHEN market = 'non-UK' THEN amount ELSE 0 END)::DOUBLE\n\
+    \  / SUM(amount)::DOUBLE AS value\nFROM truth_lines\nWHERE line_type = 'product'\
+    \ AND month BETWEEN '2010-01' AND '2010-12';\n"
+  notes: Ratio of non-UK gross product sales to total gross product sales over the
+    full year, recomputed from totals.
+- qid: R-H29
+  set: R
+  author: haiku
+  lang: en
+  question: Which five products, identified by item code, brought in the most gross
+    product sales in pounds from January to November 2011? Give me the value for each.
+  keys:
+  - sku
+  unit: gbp
+  months:
+  - 2011-01
+  - 2011-11
+  truth_sql: 'SELECT sku, SUM(amount) AS value
+
+    FROM truth_lines
+
+    WHERE line_type = ''product'' AND month BETWEEN ''2011-01'' AND ''2011-11''
+
+    GROUP BY sku
+
+    ORDER BY value DESC
+
+    LIMIT 5;
+
+    '
+  notes: Gross product sales by sku, top 5 descending. December 2025 excluded because
+    it is incomplete.
+- qid: R-H30
+  set: R
+  author: haiku
+  lang: en
+  question: For November 2011, how much gross product sales did an average active
+    UK customer generate, in pounds? Take the sales from UK orders placed by identified
+    customers, and divide by the number of active UK customers that month.
+  keys: []
+  unit: gbp
+  months:
+  - 2011-11
+  - 2011-11
+  truth_sql: "SELECT SUM(amount)::DOUBLE / COUNT(DISTINCT buyer_id) AS value\nFROM\
+    \ truth_lines\nWHERE line_type = 'product' AND market = 'UK'\n  AND buyer_id IS\
+    \ NOT NULL AND month = '2011-11';\n"
+  notes: Numerator restricted to customer-linked UK product sales so it matches the
+    denominator of active UK customers. Guest sales excluded from both.
+- qid: R-H31
+  set: R
+  author: haiku
+  lang: en
+  question: What were our net product sales in GBP for January to June 2010 combined,
+    after taking off cancellations?
+  keys: []
+  unit: gbp
+  months:
+  - 2010-01
+  - 2010-06
+  truth_sql: 'SELECT SUM(CASE WHEN line_type IN (''product'', ''cancellation'') THEN
+    amount ELSE 0 END)::DOUBLE AS value
+
+    FROM truth_lines
+
+    WHERE month BETWEEN ''2010-01'' AND ''2010-06'';
+
+    '
+  notes: Cancellation amounts are already negative, so summing product and cancellation
+    lines gives gross minus cancelled value, summed over the six months.
+- qid: R-H32
+  set: R
+  author: haiku
+  lang: en
+  question: What is the difference in average order value between UK and non-UK orders
+    from January to November 2011? Give UK minus non-UK, in pounds.
+  keys: []
+  unit: gbp
+  months:
+  - 2011-01
+  - 2011-11
+  truth_sql: "SELECT\n  SUM(CASE WHEN market = 'UK' THEN amount END)::DOUBLE\n   \
+    \ / COUNT(DISTINCT CASE WHEN market = 'UK' THEN order_no END)\n  -\n  SUM(CASE\
+    \ WHEN market = 'non-UK' THEN amount END)::DOUBLE\n    / COUNT(DISTINCT CASE WHEN\
+    \ market = 'non-UK' THEN order_no END)\n  AS value\nFROM truth_lines\nWHERE line_type\
+    \ = 'product' AND month BETWEEN '2011-01' AND '2011-11';\n"
+  notes: Each market's average order value is recomputed from its period totals, then
+    subtracted. Positive means UK is higher.
+- qid: R-H33
+  set: R
+  author: haiku
+  lang: en
+  question: Which three countries had the highest gross product sales in Q1 2011 (January
+    to March)? Give me the pound value for each.
+  keys:
+  - country
+  unit: gbp
+  months:
+  - 2011-01
+  - 2011-03
+  truth_sql: 'SELECT country, SUM(amount) AS value
+
+    FROM truth_lines
+
+    WHERE line_type = ''product'' AND month BETWEEN ''2011-01'' AND ''2011-03''
+
+    GROUP BY country
+
+    ORDER BY value DESC
+
+    LIMIT 3;
+
+    '
+  notes: Country as recorded on the line. Top 3 by gross product sales descending.
+- qid: R-H34
+  set: R
+  author: haiku
+  lang: en
+  question: From January to November 2011, what share of gross product sales came
+    from guest orders, meaning orders with no customer number? Give a share between
+    0 and 1.
+  keys: []
+  unit: share
+  months:
+  - 2011-01
+  - 2011-11
+  truth_sql: "SELECT SUM(CASE WHEN buyer_id IS NULL THEN amount ELSE 0 END)::DOUBLE\n\
+    \  / SUM(amount)::DOUBLE AS value\nFROM truth_lines\nWHERE line_type = 'product'\
+    \ AND month BETWEEN '2011-01' AND '2011-11';\n"
+  notes: Guest share of gross product sales over the period, recomputed from totals.
+- qid: R-H35
+  set: R
+  author: haiku
+  lang: en
+  question: How much cancelled value did we book in each market in April, May and
+    June 2011, in pounds?
+  keys:
+  - market
+  unit: gbp
+  months:
+  - 2011-04
+  - 2011-06
+  truth_sql: 'SELECT market, (-SUM(amount))::DOUBLE AS value
+
+    FROM truth_lines
+
+    WHERE line_type = ''cancellation'' AND month BETWEEN ''2011-04'' AND ''2011-06''
+
+    GROUP BY market
+
+    ORDER BY market;
+
+    '
+  notes: Cancelled value is positive and booked in the month of the cancellation line,
+    per market.
+  dropped: 'two readings: one total per market over April-June, or one row per market
+    and month'
+- qid: R-H36
+  set: R
+  author: haiku
+  lang: en
+  question: How many new customers did we gain each month in 2010? A new customer
+    is one whose first purchase with us in our data falls in that month.
+  keys:
+  - month
+  unit: count
+  months:
+  - 2010-01
+  - 2010-12
+  truth_sql: "WITH fm AS (\n  SELECT buyer_id, MIN(month) AS first_m\n  FROM truth_lines\n\
+    \  WHERE line_type = 'product' AND buyer_id IS NOT NULL\n  GROUP BY buyer_id\n\
+    )\nSELECT first_m AS month, COUNT(*) AS value\nFROM fm\nWHERE first_m BETWEEN\
+    \ '2010-01' AND '2010-12'\nGROUP BY first_m\nORDER BY first_m;\n"
+  notes: First product line across the whole data determines the month of entry. Guest
+    orders never count as customers.
+- qid: R-H37
+  set: R
+  author: haiku
+  lang: en
+  question: How many customers ordered in November 2011 who had already bought from
+    us in an earlier month?
+  keys: []
+  unit: count
+  months:
+  - 2011-11
+  - 2011-11
+  truth_sql: "WITH active AS (\n  SELECT DISTINCT buyer_id\n  FROM truth_lines\n \
+    \ WHERE line_type = 'product' AND buyer_id IS NOT NULL AND month = '2011-11'\n\
+    ),\nprior AS (\n  SELECT DISTINCT buyer_id\n  FROM truth_lines\n  WHERE line_type\
+    \ = 'product' AND buyer_id IS NOT NULL AND month < '2011-11'\n)\nSELECT COUNT(*)\
+    \ AS value\nFROM active\nWHERE buyer_id IN (SELECT buyer_id FROM prior);\n"
+  notes: 'Repeat customers in the month: active customers with a product line in any
+    earlier month in the data.'
+- qid: R-H38
+  set: R
+  author: haiku
+  lang: zh
+  question: 2011年1月至11月，每个月各有多少笔订单？
+  keys:
+  - month
+  unit: count
+  months:
+  - 2011-01
+  - 2011-11
+  truth_sql: 'SELECT month, COUNT(DISTINCT order_no) AS value
+
+    FROM truth_lines
+
+    WHERE line_type = ''product'' AND month BETWEEN ''2011-01'' AND ''2011-11''
+
+    GROUP BY month
+
+    ORDER BY month;
+
+    '
+  notes: Orders = distinct order numbers with at least one product line. Guest orders
+    included.
+- qid: R-H39
+  set: R
+  author: haiku
+  lang: zh
+  question: 2011年1月至11月，按商品编码（sku）统计，销量（件数）最高的前5个商品分别卖出了多少件？
+  keys:
+  - sku
+  unit: count
+  months:
+  - 2011-01
+  - 2011-11
+  truth_sql: 'SELECT sku, SUM(qty) AS value
+
+    FROM truth_lines
+
+    WHERE line_type = ''product'' AND month BETWEEN ''2011-01'' AND ''2011-11''
+
+    GROUP BY sku
+
+    ORDER BY value DESC
+
+    LIMIT 5;
+
+    '
+  notes: Units = sum of quantity on product lines by sku, top 5 descending. Cancellations
+    excluded.
+- qid: R-H40
+  set: R
+  author: haiku
+  lang: zh
+  question: 2011年1月至11月，英国市场和非英国市场的取消率分别是多少？请用0到1之间的份额表示，不要用百分比。
+  keys:
+  - market
+  unit: share
+  months:
+  - 2011-01
+  - 2011-11
+  truth_sql: "SELECT g.market,\n  COALESCE(c.cancelled, 0) / g.gross AS value\nFROM\
+    \ (\n  SELECT market, SUM(amount)::DOUBLE AS gross\n  FROM truth_lines\n  WHERE\
+    \ line_type = 'product' AND month BETWEEN '2011-01' AND '2011-11'\n  GROUP BY\
+    \ market\n) g\nLEFT JOIN (\n  SELECT market, (-SUM(amount))::DOUBLE AS cancelled\n\
+    \  FROM truth_lines\n  WHERE line_type = 'cancellation' AND month BETWEEN '2011-01'\
+    \ AND '2011-11'\n  GROUP BY market\n) c ON g.market = c.market\nORDER BY g.market;\n"
+  notes: 'Cancellation rate per market over the period: cancelled value divided by
+    gross product sales, both summed over the period before dividing.'

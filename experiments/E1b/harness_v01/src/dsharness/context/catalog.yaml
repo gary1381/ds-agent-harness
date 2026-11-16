@@ -1,0 +1,443 @@
+# Data catalog for agents: what each queryable table is, how far to trust it, and how each
+# column behaves over time.
+#
+# tier:      certified   = silver.*, built by reviewed SQL, contract-checked and reconciled to finance close
+#            staging     = staging.stg_*, renamed raw data; duplicates and unit errors are NOT fixed
+#            uncertified = bronze_safe.*, raw source export minus PII; every planted defect is still present
+# temporal:  static          value fixed once the row exists
+#            event_time      when the business event happened (or the period it belongs to)
+#            availability_time  when the row or its current state became known to the warehouse
+#            mutable_current current state, overwritten in place; reading it "as of" a past date leaks the future
+#            post_outcome    only exists after the outcome being predicted (e.g. churn) has happened
+# Static checks (verify/sql_static.py, verify/leakage.py) read these tags. Keep them precise.
+#
+# bronze.* (raw tables incl. PII) is deliberately absent: agents never query it. It is listed under
+# `restricted` only so the SQL analyzer can block it and recognise PII column names.
+
+version: 1
+
+restricted:
+  bronze:
+    reason: >-
+      Raw typed source tables, including personal data (email, phone, birth year). Only the pipeline
+      reads bronze. Agents use silver.* (certified) or bronze_safe.* (PII-free, uncertified).
+    pii_columns:
+      crm_customers: [email, phone, birth_year]
+
+rules:
+  exclude_test_accounts:
+    column: is_test_account
+    description: >-
+      About 1% of customers are internal QA accounts (email @qa.internal) with real-looking billing,
+      usage and tickets. Every customer-derived count, sum or average must exclude them with
+      NOT is_test_account. silver.invoices and silver.customers carry the flag. Other tables must
+      join silver.customers on customer_id to get it.
+  uncertified_source:
+    description: >-
+      bronze_safe.* and staging.* are not certified. Results computed from them are flagged and must
+      not be published as official numbers. Use governed metrics or silver.* instead.
+
+tables:
+  # ------------------------------------------------------------------ silver (certified)
+  silver.customers:
+    schema: silver
+    tier: certified
+    description: Customer master. One row per customer, PII removed, with a derived internal-test-account flag.
+    grain: one row per customer_id
+    required_filters: [exclude_test_accounts]
+    caveats:
+      - Internal QA accounts are included and flagged; filter NOT is_test_account for any business number.
+    columns:
+      customer_id: {description: "Customer key.", pii: false, temporal: static}
+      created_at: {description: "Sign-up timestamp (UTC).", pii: false, temporal: event_time}
+      region: {description: "Sales region (north, south, east, west).", pii: false, temporal: static}
+      channel: {description: "Acquisition channel (organic, paid_search, referral; livestream from 2026-08).", pii: false, temporal: static}
+      is_test_account: {description: "True for internal QA accounts (derived from email domain upstream).", pii: false, temporal: static}
+
+  silver.subscriptions:
+    schema: silver
+    tier: certified
+    description: >-
+      Subscriptions as currently known by billing. One row per subscription. Price, end date and cancel
+      reason show the CURRENT state as of the build, not their history.
+    grain: one row per subscription_id (one subscription per customer in this business)
+    required_filters: [exclude_test_accounts]
+    caveats:
+      - monthly_price_fen is today's list price (plus rose 5900 -> 6900 fen on 2026-08-01). For past prices use invoices or silver.ref_plan_prices.
+      - ended_at and cancel_reason are filled in when a cancellation becomes known (up to 3 days late), so a past snapshot showed NULL. Guard with updated_at.
+      - cancel_reason exists only after churn. Never use it as a predictor of churn.
+    columns:
+      subscription_id: {description: "Subscription key.", pii: false, temporal: static}
+      customer_id: {description: "Customer key (join silver.customers).", pii: false, temporal: static}
+      plan: {description: "Plan (basic, plus, pro). Plan changes are not tracked.", pii: false, temporal: static}
+      monthly_price_fen:
+        description: Current monthly list price in fen. Overwritten when prices change.
+        pii: false
+        temporal: mutable_current
+        caveats: [Not the price the customer paid in the past. That is leakage if used as of an earlier date.]
+      started_at: {description: "Subscription start timestamp (UTC).", pii: false, temporal: event_time}
+      ended_at:
+        description: End timestamp if the subscription has ended and the end is known at build time. NULL means active or not yet known.
+        pii: false
+        temporal: mutable_current
+        caveats: ["Known at updated_at, not at ended_at. For point-in-time use require updated_at <= as_of."]
+      cancel_reason:
+        description: Reason given at cancellation (price, product, service, other).
+        pii: false
+        temporal: post_outcome
+        caveats: [Recorded only after the customer churned. It is a direct label leak in churn models.]
+      updated_at: {description: "When the current state of this row became known (last change).", pii: false, temporal: availability_time}
+
+  silver.invoices:
+    schema: silver
+    tier: certified
+    description: >-
+      Governed invoice ledger. Resent duplicates removed by invoice_id. Unit errors are corrected only
+      inside a registered incident (silver.ref_known_incidents; today the 2026-03 south yuan export).
+      Refunds are negative rows. Region and test flag come from the customer.
+    grain: one row per invoice_id
+    required_filters: [exclude_test_accounts]
+    caveats:
+      - Refunds are separate negative rows booked in the month they were issued (revenue_month), not in the original charge month.
+      - Every charge equals the list price of the customer's plan valid on the day it was issued (tested at build time); an unregistered unit error fails the build instead of being corrected.
+      - Identical add-on lines (same customer, day and amount, different invoice_id) are real purchases and must not be deduplicated.
+      - Use the net_revenue_fen / addon_units metrics rather than re-deriving them.
+    columns:
+      invoice_id: {description: "Invoice line key (unique).", pii: false, temporal: static}
+      customer_id: {description: "Customer key.", pii: false, temporal: static}
+      invoice_type: {description: "charge | addon | refund.", pii: false, temporal: static}
+      amount_fen: {description: "Amount in fen (1 CNY = 100 fen). Refunds are negative. Unit-corrected.", pii: false, temporal: static}
+      unit_corrected: {description: "True if the row lies in a registered unit incident's scope and was multiplied by its factor (see silver.ref_known_incidents).", pii: false, temporal: static}
+      issued_at: {description: "When the invoice was issued (UTC).", pii: false, temporal: event_time}
+      available_at: {description: "When the invoice row reached the warehouse.", pii: false, temporal: availability_time}
+      revenue_month: {description: "Month the invoice is booked in ('YYYY-MM', from issued_at).", pii: false, temporal: event_time}
+      original_invoice_id: {description: "For refunds, the charge being refunded.", pii: false, temporal: static}
+      region: {description: "Customer region (denormalised from silver.customers).", pii: false, temporal: static}
+      is_test_account: {description: "Customer is an internal QA account. Exclude for business numbers.", pii: false, temporal: static}
+
+  silver.usage_monthly:
+    schema: silver
+    tier: certified
+    description: Monthly product usage per customer (minutes watched, sessions).
+    grain: one row per (customer_id, usage_month)
+    required_filters: [exclude_test_accounts]
+    caveats:
+      - About 6% of rows arrive 2-6 weeks after the month ends. For point-in-time features require available_at <= as_of, or the feature sees the future.
+      - The latest month in a build is incomplete until late rows arrive.
+    columns:
+      customer_id: {description: "Customer key.", pii: false, temporal: static}
+      usage_month: {description: "Usage month 'YYYY-MM'.", pii: false, temporal: event_time}
+      minutes: {description: "Minutes watched in the month.", pii: false, temporal: static}
+      pricing_page_views: {description: "Pricing-page views in the month (product analytics); NULL before tracking began in 2026-01 -- NULL means not measured, not zero.", pii: false, temporal: static}
+      sessions: {description: "Sessions in the month.", pii: false, temporal: static}
+      available_at: {description: "When the usage row reached the warehouse (can be weeks after usage_month).", pii: false, temporal: availability_time}
+
+  silver.tickets:
+    schema: silver
+    tier: certified
+    description: Customer support tickets with category and optional CSAT score.
+    grain: one row per ticket_id
+    required_filters: [exclude_test_accounts]
+    caveats:
+      - csat is NULL for about 15% of tickets (no response). Exclude NULLs from averages; do not treat them as 0.
+      - Ticket rows reach the warehouse 0-2 days after creation (available_at).
+    columns:
+      ticket_id: {description: "Ticket key.", pii: false, temporal: static}
+      customer_id: {description: "Customer key.", pii: false, temporal: static}
+      created_at: {description: "Ticket creation timestamp (UTC).", pii: false, temporal: event_time}
+      category: {description: "billing | bug | howto | cancel.", pii: false, temporal: static}
+      csat: {description: "Customer satisfaction 1-5, NULL if not rated.", pii: false, temporal: static}
+      available_at: {description: "When the ticket row reached the warehouse.", pii: false, temporal: availability_time}
+
+  silver.retention_contacts:
+    schema: silver
+    tier: certified
+    description: Randomised retention program 2026-03..2026-06 (app message + 10% discount). Experimental data for uplift / policy learning.
+    grain: one row per contact_id (customer x campaign month)
+    required_filters: []
+    caveats:
+      - Randomised 50/50 within enrolled at-risk customers; about 15% of treatment rows were not exposed (exposed = false). Analyse by arm (ITT), not by exposure.
+      - Outcome is churn during campaign_month; labels mature about one month + 7 days after the campaign month starts.
+    columns:
+      contact_id: {description: "Program enrolment key.", pii: false, temporal: static}
+      customer_id: {description: "Customer key.", pii: false, temporal: static}
+      campaign_month: {description: "Month 'YYYY-MM' of the enrolment; the outcome is churn in this month.", pii: false, temporal: event_time}
+      arm: {description: "Randomised arm: treatment | control. Use for intent-to-treat analysis.", pii: false, temporal: static}
+      exposed: {description: "Treated customer actually saw the message (post-assignment compliance). Never use it to define groups.", pii: false, temporal: static}
+      channel: {description: "Contact channel (app_message).", pii: false, temporal: static}
+      offer: {description: "Offer made to the treatment arm (discount_10pct_1m).", pii: false, temporal: static}
+      assigned_at: {description: "Randomisation timestamp (UTC), start of the campaign month.", pii: false, temporal: event_time}
+      available_at: {description: "When the enrolment row reached the warehouse.", pii: false, temporal: availability_time}
+
+  silver.finance_closed_revenue:
+    schema: silver
+    tier: certified
+    description: >-
+      Official closed books from Finance: net revenue per month and region, test accounts already
+      excluded. This is an independent record and the reconciliation target for revenue answers.
+    grain: one row per (month, region) for closed months only
+    required_filters: []
+    caveats:
+      - A month appears only after Finance closes it (about 5 days after month end), so the latest month of a build may be missing.
+    columns:
+      month: {description: "Closed month 'YYYY-MM'.", pii: false, temporal: event_time}
+      region: {description: "Sales region.", pii: false, temporal: static}
+      net_revenue_fen: {description: "Official net revenue in fen.", pii: false, temporal: static}
+
+  silver.ref_plan_prices:
+    schema: silver
+    tier: certified
+    description: Price book owned by Finance. List price per plan with validity dates (price history).
+    grain: one row per (plan, valid_from)
+    required_filters: []
+    caveats:
+      - Use this (or invoices) for historical prices, not subscriptions.monthly_price_fen.
+    columns:
+      plan: {description: "Plan.", pii: false, temporal: static}
+      price_fen: {description: "Monthly list price in fen.", pii: false, temporal: static}
+      valid_from: {description: "First day the price applies.", pii: false, temporal: event_time}
+      valid_to: {description: "Last day the price applies.", pii: false, temporal: event_time}
+
+  silver.ref_known_incidents:
+    schema: silver
+    tier: certified
+    description: >-
+      Registered data incidents approved by Finance / Billing Ops. The ONLY rows the invoice pipeline
+      corrects are those inside a registered (region, month, invoice_type) scope, multiplied by factor.
+    grain: one row per incident_id (one incident per region, month and invoice type)
+    required_filters: []
+    caveats:
+      - Reference data. Agents cannot add or widen an incident through a pipeline change; a new unit error fails the build until a human registers it.
+    columns:
+      incident_id: {description: "Incident / change-ticket key, e.g. INC-2026-03-SOUTH.", pii: false, temporal: static}
+      region: {description: "Customer region the incident affected.", pii: false, temporal: static}
+      month: {description: "Month 'YYYY-MM' (issue month) the incident affected.", pii: false, temporal: event_time}
+      invoice_type: {description: "Invoice line type the incident affected (charge).", pii: false, temporal: static}
+      factor: {description: "Multiplier that restores fen (100 = exported in yuan).", pii: false, temporal: static}
+      reason: {description: "What went wrong at the source.", pii: false, temporal: static}
+      approved_by: {description: "Who approved the registration (role mailbox and change ticket).", pii: false, temporal: static}
+
+  # ------------------------------------------------------------------ staging (not certified)
+  staging.stg_customers:
+    schema: staging
+    tier: staging
+    description: Renamed CRM customers with derived test-account flag (input to silver.customers).
+    grain: one row per customer_id
+    required_filters: [exclude_test_accounts]
+    caveats: [Staging layer; use silver.customers.]
+    columns:
+      customer_id: {description: "Customer key.", pii: false, temporal: static}
+      created_at: {description: "Sign-up timestamp.", pii: false, temporal: event_time}
+      region: {description: "Sales region.", pii: false, temporal: static}
+      channel: {description: "Acquisition channel.", pii: false, temporal: static}
+      is_test_account: {description: "Internal QA account flag.", pii: false, temporal: static}
+
+  staging.stg_subscriptions:
+    schema: staging
+    tier: staging
+    description: Renamed billing subscriptions (input to silver.subscriptions).
+    grain: one row per subscription_id
+    required_filters: [exclude_test_accounts]
+    caveats: [Staging layer; use silver.subscriptions. Same mutable/post-outcome columns.]
+    columns:
+      subscription_id: {description: "Subscription key.", pii: false, temporal: static}
+      customer_id: {description: "Customer key.", pii: false, temporal: static}
+      plan: {description: "Plan.", pii: false, temporal: static}
+      monthly_price_fen: {description: "Current list price (overwritten on price change).", pii: false, temporal: mutable_current}
+      started_at: {description: "Start timestamp.", pii: false, temporal: event_time}
+      ended_at: {description: "End timestamp as currently known.", pii: false, temporal: mutable_current}
+      cancel_reason: {description: "Cancellation reason (only after churn).", pii: false, temporal: post_outcome}
+      updated_at: {description: "When the current row state became known.", pii: false, temporal: availability_time}
+
+  staging.stg_invoices:
+    schema: staging
+    tier: staging
+    description: Renamed raw billing invoices (input to silver.invoices). NOT deduplicated, NOT unit-corrected.
+    grain: one row per exported invoice line (duplicates possible)
+    required_filters: [exclude_test_accounts]
+    caveats:
+      - Contains at-least-once resend duplicates (same invoice_id). Deduplicate by invoice_id only.
+      - South-region charges of 2026-03 are in yuan (100x too small) in amount_fen_raw (registered incident INC-2026-03-SOUTH).
+      - No test-account flag; join silver.customers.
+    columns:
+      invoice_id: {description: "Invoice line key (duplicates possible).", pii: false, temporal: static}
+      customer_id: {description: "Customer key.", pii: false, temporal: static}
+      invoice_type: {description: "charge | addon | refund.", pii: false, temporal: static}
+      amount_fen_raw: {description: "Amount as exported (fen, except the 2026-03 south yuan incident).", pii: false, temporal: static}
+      issued_at: {description: "Issue timestamp.", pii: false, temporal: event_time}
+      available_at: {description: "Arrival timestamp.", pii: false, temporal: availability_time}
+      original_invoice_id: {description: "Refunded charge for refunds.", pii: false, temporal: static}
+
+  staging.stg_usage:
+    schema: staging
+    tier: staging
+    description: Renamed monthly usage (input to silver.usage_monthly).
+    grain: one row per (customer_id, usage_month)
+    required_filters: [exclude_test_accounts]
+    caveats: [Staging layer; use silver.usage_monthly. Late-arriving rows (see available_at).]
+    columns:
+      customer_id: {description: "Customer key.", pii: false, temporal: static}
+      usage_month: {description: "Usage month 'YYYY-MM'.", pii: false, temporal: event_time}
+      minutes: {description: "Minutes watched.", pii: false, temporal: static}
+      pricing_page_views: {description: "Pricing-page views in the month (product analytics); NULL before tracking began in 2026-01 -- NULL means not measured, not zero.", pii: false, temporal: static}
+      sessions: {description: "Sessions.", pii: false, temporal: static}
+      available_at: {description: "Arrival timestamp.", pii: false, temporal: availability_time}
+
+  staging.stg_tickets:
+    schema: staging
+    tier: staging
+    description: Renamed support tickets (input to silver.tickets).
+    grain: one row per ticket_id
+    required_filters: [exclude_test_accounts]
+    caveats: [Staging layer; use silver.tickets.]
+    columns:
+      ticket_id: {description: "Ticket key.", pii: false, temporal: static}
+      customer_id: {description: "Customer key.", pii: false, temporal: static}
+      created_at: {description: "Creation timestamp.", pii: false, temporal: event_time}
+      category: {description: "Ticket category.", pii: false, temporal: static}
+      csat: {description: "CSAT 1-5 or NULL.", pii: false, temporal: static}
+      available_at: {description: "Arrival timestamp.", pii: false, temporal: availability_time}
+
+  staging.stg_retention_contacts:
+    schema: staging
+    tier: staging
+    description: Randomised retention program 2026-03..2026-06 (app message + 10% discount). Experimental data for uplift / policy learning.
+    grain: one row per contact_id (customer x campaign month)
+    required_filters: []
+    caveats:
+      - Randomised 50/50 within enrolled at-risk customers; about 15% of treatment rows were not exposed (exposed = false). Analyse by arm (ITT), not by exposure.
+      - Outcome is churn during campaign_month; labels mature about one month + 7 days after the campaign month starts.
+    columns:
+      contact_id: {description: "Program enrolment key.", pii: false, temporal: static}
+      customer_id: {description: "Customer key.", pii: false, temporal: static}
+      campaign_month: {description: "Month 'YYYY-MM' of the enrolment; the outcome is churn in this month.", pii: false, temporal: event_time}
+      arm: {description: "Randomised arm: treatment | control. Use for intent-to-treat analysis.", pii: false, temporal: static}
+      exposed: {description: "Treated customer actually saw the message (post-assignment compliance). Never use it to define groups.", pii: false, temporal: static}
+      channel: {description: "Contact channel (app_message).", pii: false, temporal: static}
+      offer: {description: "Offer made to the treatment arm (discount_10pct_1m).", pii: false, temporal: static}
+      assigned_at: {description: "Randomisation timestamp (UTC), start of the campaign month.", pii: false, temporal: event_time}
+      available_at: {description: "When the enrolment row reached the warehouse.", pii: false, temporal: availability_time}
+
+  # ------------------------------------------------------------------ bronze_safe (uncertified)
+  bronze_safe.crm_customers:
+    schema: bronze_safe
+    tier: uncertified
+    description: Raw CRM customer export with PII columns removed.
+    grain: one row per customer_id
+    required_filters: [exclude_test_accounts]
+    caveats:
+      - Internal QA accounts are included and CANNOT be identified here (the email column was removed). Join silver.customers.is_test_account.
+      - Uncertified raw export. Prefer silver.customers.
+    columns:
+      customer_id: {description: "Customer key.", pii: false, temporal: static}
+      created_at: {description: "Sign-up timestamp.", pii: false, temporal: event_time}
+      region: {description: "Sales region.", pii: false, temporal: static}
+      channel: {description: "Acquisition channel.", pii: false, temporal: static}
+      updated_at: {description: "Last CRM update timestamp.", pii: false, temporal: availability_time}
+
+  bronze_safe.billing_subscriptions:
+    schema: bronze_safe
+    tier: uncertified
+    description: Raw billing subscription export (current state at export time).
+    grain: one row per subscription_id
+    required_filters: [exclude_test_accounts]
+    caveats:
+      - monthly_price_cents is the CURRENT price in fen (despite the name), overwritten on price changes.
+      - ended_at / cancel_reason are current state; cancel_reason exists only after churn.
+      - Includes internal QA accounts with no flag; join silver.customers.
+    columns:
+      subscription_id: {description: "Subscription key.", pii: false, temporal: static}
+      customer_id: {description: "Customer key.", pii: false, temporal: static}
+      plan: {description: "Plan.", pii: false, temporal: static}
+      monthly_price_cents: {description: "Current list price in minor units (fen).", pii: false, temporal: mutable_current}
+      started_at: {description: "Start timestamp.", pii: false, temporal: event_time}
+      ended_at: {description: "End timestamp as currently known.", pii: false, temporal: mutable_current}
+      cancel_reason: {description: "Cancellation reason (only after churn).", pii: false, temporal: post_outcome}
+      updated_at: {description: "When the current row state became known.", pii: false, temporal: availability_time}
+
+  bronze_safe.billing_invoices:
+    schema: bronze_safe
+    tier: uncertified
+    description: Raw billing invoice export, exactly as the billing vendor sent it.
+    grain: one row per exported invoice line (duplicates present)
+    required_filters: [exclude_test_accounts]
+    caveats:
+      - "D1 duplicates: the export is at-least-once. The same invoice_id can appear more than once. Deduplicate by invoice_id only."
+      - "D2 look-alikes: two add-ons with the same customer, day and amount but different invoice_ids are two real purchases. Deduplicating on (customer, day, amount) undercounts."
+      - "D3 unit incident: south-region charges issued in 2026-03 were exported in yuan, not fen (100x too small)."
+      - "D4 refunds: refunds are separate negative rows booked in the month of the refund. Summing only charges overstates revenue."
+      - "D5 test accounts: internal QA accounts are included and cannot be identified here. Join silver.customers and filter NOT is_test_account."
+      - "Schema change: from the 2026-08 exports, amount_cents is replaced by amount_minor + currency (billing schema v2)."
+      - Uncertified. Use the net_revenue_fen metric or silver.invoices for any published number.
+    columns:
+      invoice_id: {description: "Invoice line key (NOT unique here).", pii: false, temporal: static}
+      customer_id: {description: "Customer key.", pii: false, temporal: static}
+      invoice_type: {description: "charge | addon | refund.", pii: false, temporal: static}
+      amount_cents: {description: "Amount in minor units (fen) as exported. Wrong for the 2026-03 south incident.", pii: false, temporal: static}
+      issued_at: {description: "Issue timestamp.", pii: false, temporal: event_time}
+      available_at: {description: "When the row was exported/arrived.", pii: false, temporal: availability_time}
+      original_invoice_id: {description: "Refunded charge for refunds.", pii: false, temporal: static}
+
+  bronze_safe.app_usage_monthly:
+    schema: bronze_safe
+    tier: uncertified
+    description: Raw monthly usage export from the app.
+    grain: one row per (customer_id, usage_month)
+    required_filters: [exclude_test_accounts]
+    caveats:
+      - Late-arriving rows (available_at weeks after the month). Includes QA accounts (join silver.customers).
+    columns:
+      customer_id: {description: "Customer key.", pii: false, temporal: static}
+      usage_month: {description: "Usage month 'YYYY-MM'.", pii: false, temporal: event_time}
+      minutes: {description: "Minutes watched.", pii: false, temporal: static}
+      pricing_page_views: {description: "Pricing-page views in the month (product analytics); NULL before tracking began in 2026-01 -- NULL means not measured, not zero.", pii: false, temporal: static}
+      sessions: {description: "Sessions.", pii: false, temporal: static}
+      available_at: {description: "Arrival timestamp.", pii: false, temporal: availability_time}
+
+  bronze_safe.support_tickets:
+    schema: bronze_safe
+    tier: uncertified
+    description: Raw support ticket export.
+    grain: one row per ticket_id
+    required_filters: [exclude_test_accounts]
+    caveats:
+      - Includes QA accounts with no flag (join silver.customers). csat NULL when not rated.
+    columns:
+      ticket_id: {description: "Ticket key.", pii: false, temporal: static}
+      customer_id: {description: "Customer key.", pii: false, temporal: static}
+      created_at: {description: "Creation timestamp.", pii: false, temporal: event_time}
+      category: {description: "Ticket category.", pii: false, temporal: static}
+      csat: {description: "CSAT 1-5 or NULL.", pii: false, temporal: static}
+      available_at: {description: "Arrival timestamp.", pii: false, temporal: availability_time}
+
+  bronze_safe.crm_retention_contacts:
+    schema: bronze_safe
+    tier: uncertified
+    description: Randomised retention program 2026-03..2026-06 (app message + 10% discount). Experimental data for uplift / policy learning.
+    grain: one row per contact_id (customer x campaign month)
+    required_filters: []
+    caveats:
+      - Randomised 50/50 within enrolled at-risk customers; about 15% of treatment rows were not exposed (exposed = false). Analyse by arm (ITT), not by exposure.
+      - Outcome is churn during campaign_month; labels mature about one month + 7 days after the campaign month starts.
+    columns:
+      contact_id: {description: "Program enrolment key.", pii: false, temporal: static}
+      customer_id: {description: "Customer key.", pii: false, temporal: static}
+      campaign_month: {description: "Month 'YYYY-MM' of the enrolment; the outcome is churn in this month.", pii: false, temporal: event_time}
+      arm: {description: "Randomised arm: treatment | control. Use for intent-to-treat analysis.", pii: false, temporal: static}
+      exposed: {description: "Treated customer actually saw the message (post-assignment compliance). Never use it to define groups.", pii: false, temporal: static}
+      channel: {description: "Contact channel (app_message).", pii: false, temporal: static}
+      offer: {description: "Offer made to the treatment arm (discount_10pct_1m).", pii: false, temporal: static}
+      assigned_at: {description: "Randomisation timestamp (UTC), start of the campaign month.", pii: false, temporal: event_time}
+      available_at: {description: "When the enrolment row reached the warehouse.", pii: false, temporal: availability_time}
+
+  bronze_safe.finance_closed_revenue:
+    schema: bronze_safe
+    tier: uncertified
+    description: Raw copy of Finance's closed-books export (same content as silver.finance_closed_revenue).
+    grain: one row per (month, region) for closed months
+    required_filters: []
+    caveats: [Use silver.finance_closed_revenue (certified copy).]
+    columns:
+      month: {description: "Closed month 'YYYY-MM'.", pii: false, temporal: event_time}
+      region: {description: "Sales region.", pii: false, temporal: static}
+      net_revenue_fen: {description: "Official net revenue in fen.", pii: false, temporal: static}

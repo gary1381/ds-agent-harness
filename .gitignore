@@ -1,0 +1,50 @@
+workspace/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.hypothesis/
+*.egg-info/
+
+# E1 evaluator-only truth database and author sandboxes
+experiments/**/evaluator.duckdb
+experiments/E1/authors/*/home/
+experiments/*/authors*/*/work/
+experiments/*/runs/*/attempts/
+experiments/*/runs/*/*.duckdb
+experiments/E2/derived/
+experiments/E2/out/pytest.log
+experiments/E2/out/err.txt
+
+# Private: never publish. Local paths, account files copied into sandbox homes, run transcripts,
+# and the readout retro on other private projects (E2).
+experiments/**/home/
+experiments/*/authors*/*/stdout.txt
+experiments/*/authors*/*/stderr.txt
+experiments/*/runs/
+experiments/E2/
+docs/experiments/E2/
+experiments/*/questions/classify_run/
+
+# E3d dbt project: downloaded packages and dbt output (package-lock.yml is kept)
+experiments/E3d/dbt_taxi*/dbt_packages
+experiments/E3d/dbt_taxi*/target/
+experiments/E3d/dbt_taxi*/logs/
+experiments/E3d/dbt_taxi*/out/
+experiments/E3d/dbt_taxi*/raw/
+experiments/E3d/dbt_taxi*/*.duckdb
+experiments/E3d/dbt_y20*/dbt_packages
+experiments/E3d/dbt_y20*/target/
+experiments/E3d/dbt_y20*/logs/
+experiments/E3d/dbt_y20*/out/
+experiments/E3d/dbt_y20*/raw/
+experiments/E3d/dbt_y20*/*.duckdb
+
+# Public release: never commit credentials, local databases or downloaded data
+.env
+.env.*
+*.sqlite
+*.sqlite3
+*.db
+*.duckdb
+*.part

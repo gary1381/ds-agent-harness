@@ -1,0 +1,446 @@
+[
+ {
+  "qid": "R-L01",
+  "form": "DIRECT",
+  "metric": "gross_product_sales",
+  "why": "single month, UK filter"
+ },
+ {
+  "qid": "R-L02",
+  "form": "DERIVED",
+  "metric": "net_product_sales",
+  "why": "sum of 3 months, non-UK"
+ },
+ {
+  "qid": "R-L03",
+  "form": "DIRECT",
+  "metric": "orders",
+  "why": "single month, total"
+ },
+ {
+  "qid": "R-L04",
+  "form": "DIRECT",
+  "metric": "average_order_value",
+  "why": "single month, UK filter"
+ },
+ {
+  "qid": "R-L05",
+  "form": "DIRECT",
+  "metric": "units_sold",
+  "why": "single month, UK filter"
+ },
+ {
+  "qid": "R-L06",
+  "form": "DERIVED",
+  "metric": "active_customers",
+  "why": "non-UK aggregate of distinct counts; cannot sum markets"
+ },
+ {
+  "qid": "R-L07",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "month-over-month growth percentage"
+ },
+ {
+  "qid": "R-L08",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "non-UK share of total"
+ },
+ {
+  "qid": "R-L09",
+  "form": "DIRECT",
+  "metric": "average_order_value",
+  "why": "single month, breakdown by market"
+ },
+ {
+  "qid": "R-L10",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "top-5 ranking by country"
+ },
+ {
+  "qid": "R-L11",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "sales divided by active customers"
+ },
+ {
+  "qid": "R-L12",
+  "form": "DERIVED",
+  "metric": "net_product_sales",
+  "why": "cumulative sum of 6 months"
+ },
+ {
+  "qid": "R-L13",
+  "form": "DERIVED",
+  "metric": "units_sold",
+  "why": "units divided by orders"
+ },
+ {
+  "qid": "R-L14",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "quarter share by market"
+ },
+ {
+  "qid": "R-L15",
+  "form": "DERIVED",
+  "metric": "cancellation_rate",
+  "why": "ratio converted to percentage"
+ },
+ {
+  "qid": "R-L16",
+  "form": "DIRECT",
+  "metric": "new_customers",
+  "why": "single month, breakdown by market"
+ },
+ {
+  "qid": "R-L17",
+  "form": "DIRECT",
+  "metric": "repeat_customers",
+  "why": "single month, total"
+ },
+ {
+  "qid": "R-L18",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "quarter-over-quarter growth"
+ },
+ {
+  "qid": "R-L19",
+  "form": "DERIVED",
+  "metric": "repeat_customers",
+  "why": "share of active customers, percentage"
+ },
+ {
+  "qid": "R-L20",
+  "form": "DERIVED",
+  "metric": "net_product_sales",
+  "why": "quarter sum, non-UK, divided by orders"
+ },
+ {
+  "qid": "R-H02",
+  "form": "DERIVED",
+  "metric": "net_product_sales",
+  "why": "sum of 3 months per market"
+ },
+ {
+  "qid": "R-H03",
+  "form": "DIRECT",
+  "metric": "cancellation_rate",
+  "why": "single month, all markets, ratio unit"
+ },
+ {
+  "qid": "R-H04",
+  "form": "DERIVED",
+  "metric": "average_order_value",
+  "why": "quarter gross divided by orders, non-UK"
+ },
+ {
+  "qid": "R-H05",
+  "form": "DIRECT",
+  "metric": "units_sold",
+  "why": "monthly rows for 2024"
+ },
+ {
+  "qid": "R-H06",
+  "form": "DIRECT",
+  "metric": "active_customers",
+  "why": "single month, breakdown by market"
+ },
+ {
+  "qid": "R-H07",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "month-over-month percentage change"
+ },
+ {
+  "qid": "R-H08",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "UK share of 11-month total"
+ },
+ {
+  "qid": "R-H09",
+  "form": "DERIVED",
+  "metric": null,
+  "why": "no product dimension; top-5 ranking"
+ },
+ {
+  "qid": "R-H10",
+  "form": "DERIVED",
+  "metric": null,
+  "why": "no guest-order dimension; share"
+ },
+ {
+  "qid": "R-H11",
+  "form": "DERIVED",
+  "metric": "average_order_value",
+  "why": "ratio of UK to non-UK AOV over period"
+ },
+ {
+  "qid": "R-H12",
+  "form": "DERIVED",
+  "metric": "net_product_sales",
+  "why": "running cumulative sum"
+ },
+ {
+  "qid": "R-H13",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "sales divided by active customers, per month"
+ },
+ {
+  "qid": "R-H14",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "year-over-year growth percentage"
+ },
+ {
+  "qid": "R-H15",
+  "form": "DERIVED",
+  "metric": "cancellation_rate",
+  "why": "quarter ratio per market; months cannot be averaged"
+ },
+ {
+  "qid": "R-H16",
+  "form": "DIRECT",
+  "metric": "new_customers",
+  "why": "single month, total"
+ },
+ {
+  "qid": "R-H17",
+  "form": "DIRECT",
+  "metric": "repeat_customers",
+  "why": "single month, total"
+ },
+ {
+  "qid": "R-H18",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "non-UK aggregate per month"
+ },
+ {
+  "qid": "R-H19",
+  "form": "DIRECT",
+  "metric": "cancelled_value",
+  "why": "single month, UK filter"
+ },
+ {
+  "qid": "R-H20",
+  "form": "DERIVED",
+  "metric": "orders",
+  "why": "non-UK aggregate of distinct counts"
+ },
+ {
+  "qid": "R-L22",
+  "form": "DERIVED",
+  "metric": "net_product_sales",
+  "why": "sum of 3 months"
+ },
+ {
+  "qid": "R-L23",
+  "form": "DERIVED",
+  "metric": "orders",
+  "why": "non-UK aggregate over 3 months"
+ },
+ {
+  "qid": "R-L24",
+  "form": "DIRECT",
+  "metric": "average_order_value",
+  "why": "single month, UK filter"
+ },
+ {
+  "qid": "R-L25",
+  "form": "DERIVED",
+  "metric": "units_sold",
+  "why": "non-UK aggregate for a month"
+ },
+ {
+  "qid": "R-L26",
+  "form": "DIRECT",
+  "metric": "active_customers",
+  "why": "single month, UK filter"
+ },
+ {
+  "qid": "R-L27",
+  "form": "DERIVED",
+  "metric": "net_product_sales",
+  "why": "month-over-month percentage change"
+ },
+ {
+  "qid": "R-L28",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "non-UK share of quarter"
+ },
+ {
+  "qid": "R-L30",
+  "form": "DERIVED",
+  "metric": null,
+  "why": "no product dimension; top-5 ranking"
+ },
+ {
+  "qid": "R-L31",
+  "form": "DERIVED",
+  "metric": "net_product_sales",
+  "why": "sum over quarter divided by active customers"
+ },
+ {
+  "qid": "R-L33",
+  "form": "DERIVED",
+  "metric": "units_sold",
+  "why": "units divided by orders, by market"
+ },
+ {
+  "qid": "R-L34",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "each month's share of quarter"
+ },
+ {
+  "qid": "R-L35",
+  "form": "DIRECT",
+  "metric": "cancelled_value",
+  "why": "monthly rows for Q4 2024"
+ },
+ {
+  "qid": "R-L36",
+  "form": "DIRECT",
+  "metric": "new_customers",
+  "why": "single month, total"
+ },
+ {
+  "qid": "R-L37",
+  "form": "DIRECT",
+  "metric": "repeat_customers",
+  "why": "single month, total"
+ },
+ {
+  "qid": "R-L38",
+  "form": "DERIVED",
+  "metric": "cancelled_value",
+  "why": "difference between two months"
+ },
+ {
+  "qid": "R-L39",
+  "form": "DERIVED",
+  "metric": "new_customers",
+  "why": "share of active customers, percentage"
+ },
+ {
+  "qid": "R-L40",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "UK and non-UK shares of quarter"
+ },
+ {
+  "qid": "R-H21",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "sum of 3 months per market"
+ },
+ {
+  "qid": "R-H22",
+  "form": "DIRECT",
+  "metric": "orders",
+  "why": "orders already count product lines only"
+ },
+ {
+  "qid": "R-H23",
+  "form": "DIRECT",
+  "metric": "average_order_value",
+  "why": "single month, UK filter"
+ },
+ {
+  "qid": "R-H25",
+  "form": "DIRECT",
+  "metric": "active_customers",
+  "why": "monthly rows for H1 2025"
+ },
+ {
+  "qid": "R-H26",
+  "form": "DERIVED",
+  "metric": "cancellation_rate",
+  "why": "non-UK aggregate ratio"
+ },
+ {
+  "qid": "R-H27",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "year-over-year growth percentage"
+ },
+ {
+  "qid": "R-H28",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "non-UK share of annual total"
+ },
+ {
+  "qid": "R-H29",
+  "form": "DERIVED",
+  "metric": null,
+  "why": "no product dimension; top-5 ranking"
+ },
+ {
+  "qid": "R-H30",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "sales divided by active UK customers"
+ },
+ {
+  "qid": "R-H31",
+  "form": "DERIVED",
+  "metric": "net_product_sales",
+  "why": "sum of 6 months"
+ },
+ {
+  "qid": "R-H32",
+  "form": "DERIVED",
+  "metric": "average_order_value",
+  "why": "difference between UK and non-UK AOV"
+ },
+ {
+  "qid": "R-H33",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "top-3 ranking by country"
+ },
+ {
+  "qid": "R-H34",
+  "form": "DERIVED",
+  "metric": null,
+  "why": "no guest-order dimension; share"
+ },
+ {
+  "qid": "R-H36",
+  "form": "DIRECT",
+  "metric": "new_customers",
+  "why": "monthly rows for 2024"
+ },
+ {
+  "qid": "R-H37",
+  "form": "DIRECT",
+  "metric": "repeat_customers",
+  "why": "single month, total"
+ },
+ {
+  "qid": "R-H38",
+  "form": "DIRECT",
+  "metric": "orders",
+  "why": "monthly rows for Jan–Nov 2025"
+ },
+ {
+  "qid": "R-H39",
+  "form": "DERIVED",
+  "metric": null,
+  "why": "no sku dimension; top-5 ranking by units"
+ },
+ {
+  "qid": "R-H40",
+  "form": "DERIVED",
+  "metric": "cancellation_rate",
+  "why": "period ratio per market; months cannot be averaged"
+ }
+]

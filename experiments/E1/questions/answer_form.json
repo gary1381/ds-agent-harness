@@ -1,0 +1,272 @@
+[
+ {
+  "qid": "S-A1",
+  "form": "DIRECT",
+  "metric": "net_revenue_fen",
+  "why": "monthly rows by region, fen unchanged"
+ },
+ {
+  "qid": "S-A2",
+  "form": "DIRECT",
+  "metric": "active_subscribers_eom",
+  "why": "single month, no arithmetic"
+ },
+ {
+  "qid": "S-A3",
+  "form": "DIRECT",
+  "metric": "churn_rate",
+  "why": "single month ratio, already 0-1"
+ },
+ {
+  "qid": "S-A4",
+  "form": "DIRECT",
+  "metric": "addon_units",
+  "why": "single month count"
+ },
+ {
+  "qid": "S-A5",
+  "form": "DIRECT",
+  "metric": "arpu_fen",
+  "why": "single month value in fen"
+ },
+ {
+  "qid": "S-A6",
+  "form": "DERIVED",
+  "metric": "avg_csat",
+  "why": "averages three monthly means over Q1"
+ },
+ {
+  "qid": "B-L01",
+  "form": "DERIVED",
+  "metric": "net_revenue_fen",
+  "why": "fen to CNY conversion"
+ },
+ {
+  "qid": "B-L02",
+  "form": "DIRECT",
+  "metric": "active_subscribers_eom",
+  "why": "monthly rows by region"
+ },
+ {
+  "qid": "B-L03",
+  "form": "DIRECT",
+  "metric": "churn_rate",
+  "why": "monthly rows by plan, 0-1"
+ },
+ {
+  "qid": "B-L04",
+  "form": "DIRECT",
+  "metric": "arpu_fen",
+  "why": "March value already in fen"
+ },
+ {
+  "qid": "B-L05",
+  "form": "DIRECT",
+  "metric": "active_subscribers_bom",
+  "why": "monthly rows by channel"
+ },
+ {
+  "qid": "B-L06",
+  "form": "DIRECT",
+  "metric": "churned_customers",
+  "why": "monthly rows by region"
+ },
+ {
+  "qid": "B-L07",
+  "form": "DIRECT",
+  "metric": "active_subscribers_eom",
+  "why": "monthly rows by plan"
+ },
+ {
+  "qid": "B-L08",
+  "form": "DERIVED",
+  "metric": "net_revenue_fen",
+  "why": "percent change between two months"
+ },
+ {
+  "qid": "B-L09",
+  "form": "DERIVED",
+  "metric": "net_revenue_fen",
+  "why": "regional share of a total"
+ },
+ {
+  "qid": "B-L10",
+  "form": "DERIVED",
+  "metric": null,
+  "why": "no watch-minutes metric; per-subscriber division"
+ },
+ {
+  "qid": "B-L11",
+  "form": "DERIVED",
+  "metric": null,
+  "why": "no ticket-count metric; per-subscriber division"
+ },
+ {
+  "qid": "B-L12",
+  "form": "DERIVED",
+  "metric": "net_revenue_fen",
+  "why": "sum over months plus CNY conversion"
+ },
+ {
+  "qid": "B-L13",
+  "form": "DERIVED",
+  "metric": null,
+  "why": "no signup-cohort metric; share computation"
+ },
+ {
+  "qid": "B-L14",
+  "form": "DERIVED",
+  "metric": "churn_rate",
+  "why": "difference between two plan rates"
+ },
+ {
+  "qid": "B-L15",
+  "form": "DIRECT",
+  "metric": "arpu_fen",
+  "why": "monthly rows by region, fen per active BOM"
+ },
+ {
+  "qid": "B-L16",
+  "form": "DERIVED",
+  "metric": "net_revenue_fen",
+  "why": "average over three months plus CNY conversion"
+ },
+ {
+  "qid": "B-L17",
+  "form": "DERIVED",
+  "metric": null,
+  "why": "no signup-cohort metric; share computation"
+ },
+ {
+  "qid": "B-L18",
+  "form": "DERIVED",
+  "metric": "program_churn_rate",
+  "why": "difference between arm rates"
+ },
+ {
+  "qid": "B-L19",
+  "form": "DIRECT",
+  "metric": "program_churn_rate",
+  "why": "April rows by arm, 0-1"
+ },
+ {
+  "qid": "B-L20",
+  "form": "DERIVED",
+  "metric": "program_churn_rate",
+  "why": "pooled across campaigns, then difference"
+ },
+ {
+  "qid": "B-H01",
+  "form": "DIRECT",
+  "metric": "churn_rate",
+  "why": "single month ratio, already 0-1"
+ },
+ {
+  "qid": "B-H02",
+  "form": "DERIVED",
+  "metric": "net_revenue_fen",
+  "why": "fen to CNY conversion"
+ },
+ {
+  "qid": "B-H03",
+  "form": "DIRECT",
+  "metric": "active_subscribers_eom",
+  "why": "single month count"
+ },
+ {
+  "qid": "B-H04",
+  "form": "DIRECT",
+  "metric": "churn_rate",
+  "why": "monthly rows by plan, 0-1"
+ },
+ {
+  "qid": "B-H05",
+  "form": "DIRECT",
+  "metric": "arpu_fen",
+  "why": "April value already in fen; rounding is formatting"
+ },
+ {
+  "qid": "B-H06",
+  "form": "DERIVED",
+  "metric": "net_revenue_fen",
+  "why": "quarter sum plus CNY conversion"
+ },
+ {
+  "qid": "B-H07",
+  "form": "DERIVED",
+  "metric": "net_revenue_fen",
+  "why": "percent growth between two months"
+ },
+ {
+  "qid": "B-H08",
+  "form": "DERIVED",
+  "metric": "net_revenue_fen",
+  "why": "regional share of annual total"
+ },
+ {
+  "qid": "B-H09",
+  "form": "DERIVED",
+  "metric": null,
+  "why": "no watch-minutes metric; per-subscriber average"
+ },
+ {
+  "qid": "B-H10",
+  "form": "DERIVED",
+  "metric": "net_revenue_fen",
+  "why": "cumulative sum plus CNY conversion"
+ },
+ {
+  "qid": "B-H11",
+  "form": "DERIVED",
+  "metric": "net_revenue_fen",
+  "why": "regional share of a monthly total"
+ },
+ {
+  "qid": "B-H12",
+  "form": "DERIVED",
+  "metric": null,
+  "why": "no ticket-count metric; per-subscriber average"
+ },
+ {
+  "qid": "B-H13",
+  "form": "DERIVED",
+  "metric": "churn_rate",
+  "why": "ratio between two channel rates"
+ },
+ {
+  "qid": "B-H14",
+  "form": "DERIVED",
+  "metric": "net_revenue_fen",
+  "why": "month-over-month comparisons then count"
+ },
+ {
+  "qid": "B-H16",
+  "form": "DERIVED",
+  "metric": null,
+  "why": "no message-exposure metric; share computation"
+ },
+ {
+  "qid": "B-H17",
+  "form": "DERIVED",
+  "metric": null,
+  "why": "no exposure dimension on churn metrics"
+ },
+ {
+  "qid": "B-H18",
+  "form": "DIRECT",
+  "metric": "churn_rate",
+  "why": "February rows by channel, 0-1"
+ },
+ {
+  "qid": "B-H19",
+  "form": "DERIVED",
+  "metric": "net_revenue_fen",
+  "why": "annual average per region plus CNY conversion"
+ },
+ {
+  "qid": "B-H20",
+  "form": "DIRECT",
+  "metric": "active_subscribers_bom",
+  "why": "April start-of-month rows by region"
+ }
+]

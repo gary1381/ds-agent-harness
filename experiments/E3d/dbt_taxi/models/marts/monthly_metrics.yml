@@ -1,0 +1,40 @@
+version: 2
+
+models:
+  - name: monthly_metrics
+    description: The served metrics, one row per month (DEFINITIONS.md). Once a month is served, its numbers do not change.
+    config:
+      materialized: table
+      contract:
+        enforced: true
+    data_tests:
+      - dbt_expectations.expect_table_row_count_to_equal:
+          arguments:
+            value: 1
+    columns:
+      - name: month
+        data_type: varchar
+      - name: trips
+        data_type: bigint
+        data_tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "> 0"
+      - name: fare_amount
+        data_type: double
+      - name: extra
+        data_type: double
+      - name: mta_tax
+        data_type: double
+      - name: tip_amount
+        data_type: double
+      - name: tolls_amount
+        data_type: double
+      - name: improvement_surcharge
+        data_type: double
+      - name: congestion_surcharge
+        data_type: double
+      - name: airport_fee
+        data_type: double
+      - name: total_amount
+        data_type: double

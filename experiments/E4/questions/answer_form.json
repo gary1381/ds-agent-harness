@@ -1,0 +1,410 @@
+[
+ {
+  "qid": "F-L01",
+  "form": "DIRECT",
+  "metric": "gross_product_sales",
+  "why": "single market, single month"
+ },
+ {
+  "qid": "F-L02",
+  "form": "DIRECT",
+  "metric": "units_sold",
+  "why": "monthly rows broken down by market"
+ },
+ {
+  "qid": "F-L03",
+  "form": "DIRECT",
+  "metric": "orders",
+  "why": "monthly rows broken down by customer_type"
+ },
+ {
+  "qid": "F-L04",
+  "form": "DERIVED",
+  "metric": "average_order_value",
+  "why": "non-UK is an aggregate over markets, needs recomputation"
+ },
+ {
+  "qid": "F-L05",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "sales divided by active identified customers, no such metric"
+ },
+ {
+  "qid": "F-L06",
+  "form": "DERIVED",
+  "metric": "units_sold",
+  "why": "units divided by orders"
+ },
+ {
+  "qid": "F-L07",
+  "form": "DERIVED",
+  "metric": "cancelled_value",
+  "why": "cancelled value divided by orders"
+ },
+ {
+  "qid": "F-L08",
+  "form": "DERIVED",
+  "metric": "repeat_customers",
+  "why": "ratio of repeat to active customers"
+ },
+ {
+  "qid": "F-L09",
+  "form": "DERIVED",
+  "metric": "net_product_sales",
+  "why": "quarterly sums and percent change"
+ },
+ {
+  "qid": "F-L10",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "percent change between two months"
+ },
+ {
+  "qid": "F-L12",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "monthly percent change versus prior year"
+ },
+ {
+  "qid": "F-L13",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "top-5 ranking over sku breakdown"
+ },
+ {
+  "qid": "F-L14",
+  "form": "DERIVED",
+  "metric": "orders",
+  "why": "top-5 ranking over countries"
+ },
+ {
+  "qid": "F-L15",
+  "form": "DERIVED",
+  "metric": "units_sold",
+  "why": "top-5 ranking over skus"
+ },
+ {
+  "qid": "F-L16",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "share of total, non-UK aggregated"
+ },
+ {
+  "qid": "F-L17",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "share of total by customer_type"
+ },
+ {
+  "qid": "F-L18",
+  "form": "DIRECT",
+  "metric": "cancellation_rate",
+  "why": "monthly ratio, no transformation"
+ },
+ {
+  "qid": "F-L19",
+  "form": "DIRECT",
+  "metric": "new_customers",
+  "why": "monthly count matches definition"
+ },
+ {
+  "qid": "F-L20",
+  "form": "DIRECT",
+  "metric": "repeat_customers",
+  "why": "monthly rows for range"
+ },
+ {
+  "qid": "F-H01",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "non-UK must be summed across markets"
+ },
+ {
+  "qid": "F-H02",
+  "form": "DIRECT",
+  "metric": "orders",
+  "why": "single country and month filter"
+ },
+ {
+  "qid": "F-H03",
+  "form": "DIRECT",
+  "metric": "units_sold",
+  "why": "single sku and month filter"
+ },
+ {
+  "qid": "F-H04",
+  "form": "DIRECT",
+  "metric": "gross_product_sales",
+  "why": "two rows by customer_type, unchanged"
+ },
+ {
+  "qid": "F-H05",
+  "form": "DERIVED",
+  "metric": "units_sold",
+  "why": "units divided by orders over quarter"
+ },
+ {
+  "qid": "F-H06",
+  "form": "DERIVED",
+  "metric": "cancelled_value",
+  "why": "cancelled value divided by orders"
+ },
+ {
+  "qid": "F-H07",
+  "form": "DERIVED",
+  "metric": null,
+  "why": "quarter-distinct customer count not governed"
+ },
+ {
+  "qid": "F-H08",
+  "form": "DERIVED",
+  "metric": "repeat_customers",
+  "why": "ratio of repeat to active customers"
+ },
+ {
+  "qid": "F-H09",
+  "form": "DERIVED",
+  "metric": "net_product_sales",
+  "why": "quarterly percent change"
+ },
+ {
+  "qid": "F-H10",
+  "form": "DERIVED",
+  "metric": "net_product_sales",
+  "why": "monthly percent change versus prior year"
+ },
+ {
+  "qid": "F-H11",
+  "form": "DERIVED",
+  "metric": "net_product_sales",
+  "why": "running total across months"
+ },
+ {
+  "qid": "F-H12",
+  "form": "DERIVED",
+  "metric": "average_order_value",
+  "why": "quarterly recomputation and percent change"
+ },
+ {
+  "qid": "F-H14",
+  "form": "DERIVED",
+  "metric": "net_product_sales",
+  "why": "annual sums and top-5 ranking"
+ },
+ {
+  "qid": "F-H15",
+  "form": "DERIVED",
+  "metric": "cancellation_rate",
+  "why": "top-3 ranking over months"
+ },
+ {
+  "qid": "F-H17",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "half-year share by customer_type"
+ },
+ {
+  "qid": "F-H18",
+  "form": "DIRECT",
+  "metric": "new_customers",
+  "why": "monthly rows for range"
+ },
+ {
+  "qid": "F-H20",
+  "form": "DERIVED",
+  "metric": "cancellation_rate",
+  "why": "quarterly recomputation, non-UK aggregated"
+ },
+ {
+  "qid": "F-L22",
+  "form": "DERIVED",
+  "metric": "orders",
+  "why": "non-UK is a sum across markets"
+ },
+ {
+  "qid": "F-L23",
+  "form": "DIRECT",
+  "metric": "units_sold",
+  "why": "two rows by customer_type"
+ },
+ {
+  "qid": "F-L24",
+  "form": "DERIVED",
+  "metric": "average_order_value",
+  "why": "quarterly gross divided by orders"
+ },
+ {
+  "qid": "F-L26",
+  "form": "DERIVED",
+  "metric": "units_sold",
+  "why": "units divided by orders by month"
+ },
+ {
+  "qid": "F-L27",
+  "form": "DERIVED",
+  "metric": "repeat_customers",
+  "why": "ratio of repeat to active customers"
+ },
+ {
+  "qid": "F-L28",
+  "form": "DERIVED",
+  "metric": "cancelled_value",
+  "why": "cancelled value divided by orders"
+ },
+ {
+  "qid": "F-L29",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "quarterly percent change"
+ },
+ {
+  "qid": "F-L30",
+  "form": "DIRECT",
+  "metric": "net_product_sales",
+  "why": "monthly rows for range"
+ },
+ {
+  "qid": "F-L31",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "year-over-year difference"
+ },
+ {
+  "qid": "F-L34",
+  "form": "DERIVED",
+  "metric": "net_product_sales",
+  "why": "quarterly sums and top-5 ranking"
+ },
+ {
+  "qid": "F-L35",
+  "form": "DERIVED",
+  "metric": "units_sold",
+  "why": "quarterly sums and top-5 ranking"
+ },
+ {
+  "qid": "F-L36",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "share of total"
+ },
+ {
+  "qid": "F-L37",
+  "form": "DERIVED",
+  "metric": "orders",
+  "why": "share of orders by customer_type"
+ },
+ {
+  "qid": "F-L38",
+  "form": "DERIVED",
+  "metric": "cancellation_rate",
+  "why": "ratio converted to percentage"
+ },
+ {
+  "qid": "F-L39",
+  "form": "DIRECT",
+  "metric": "new_customers",
+  "value": "monthly rows for range"
+ },
+ {
+  "qid": "F-L40",
+  "form": "DERIVED",
+  "metric": "repeat_customers",
+  "why": "non-UK aggregated, cross-market distinct not governed"
+ },
+ {
+  "qid": "F-H21",
+  "form": "DIRECT",
+  "metric": "gross_product_sales",
+  "why": "monthly total before cancellations"
+ },
+ {
+  "qid": "F-H22",
+  "form": "DERIVED",
+  "metric": "active_customers",
+  "why": "outside-UK is a sum across markets"
+ },
+ {
+  "qid": "F-H23",
+  "form": "DIRECT",
+  "metric": "net_product_sales",
+  "why": "single country and month filter"
+ },
+ {
+  "qid": "F-H24",
+  "form": "DIRECT",
+  "metric": "orders",
+  "why": "single month, guest customer_type"
+ },
+ {
+  "qid": "F-H25",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "per identified customer, no such metric"
+ },
+ {
+  "qid": "F-H26",
+  "form": "DERIVED",
+  "metric": "units_sold",
+  "why": "units divided by orders over range"
+ },
+ {
+  "qid": "F-H27",
+  "form": "DERIVED",
+  "metric": "cancelled_value",
+  "why": "cancelled value divided by orders"
+ },
+ {
+  "qid": "F-H30",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "year-over-year difference"
+ },
+ {
+  "qid": "F-H31",
+  "form": "DERIVED",
+  "metric": "orders",
+  "why": "half-year percent change"
+ },
+ {
+  "qid": "F-H32",
+  "form": "DERIVED",
+  "metric": "net_product_sales",
+  "why": "cumulative sum over months"
+ },
+ {
+  "qid": "F-H33",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "multi-month sum and top-5 ranking"
+ },
+ {
+  "qid": "F-H34",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "annual sums and top-10 ranking"
+ },
+ {
+  "qid": "F-H36",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "share of total, non-UK aggregated"
+ },
+ {
+  "qid": "F-H37",
+  "form": "DERIVED",
+  "metric": "gross_product_sales",
+  "why": "quarterly share by customer_type and market"
+ },
+ {
+  "qid": "F-H38",
+  "form": "DERIVED",
+  "metric": "cancellation_rate",
+  "why": "quarterly recomputation for UK"
+ },
+ {
+  "qid": "F-H39",
+  "form": "DIRECT",
+  "metric": "new_customers",
+  "why": "monthly rows for range"
+ }
+]

@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400" font-family="system-ui, sans-serif" font-size="12"><rect width="900" height="400" fill="#fcfcfb"/>
+<text x="16" y="26" font-size="16" font-weight="600" fill="#1f1f1d">E3d: pipeline months, 6 held-out tasks, 108 attempts (2 agents × 3 arms × 3 reps)</text>
+<rect x="16" y="40" width="12" height="12" rx="2" fill="#9a9993"/>
+<text x="34" y="50" fill="#1f1f1d">N: agent alone</text>
+<rect x="144" y="40" width="12" height="12" rx="2" fill="#eb6834"/>
+<text x="162" y="50" fill="#1f1f1d">NI: alone + control total</text>
+<rect x="349" y="40" width="12" height="12" rx="2" fill="#2a78d6"/>
+<text x="367" y="50" fill="#1f1f1d">H: harness gate</text>
+<text x="16" y="86" font-size="14" font-weight="600" fill="#1f1f1d">Silent error rate P1 (lower is better)</text>
+<text x="16" y="104" fill="#5c5b57">All 14 silent errors that vanish are ci/ edits</text>
+<line x1="50" x2="416" y1="340.0" y2="340.0" stroke="#e6e5e0"/>
+<text x="44" y="344.0" text-anchor="end" fill="#5c5b57">0%</text>
+<line x1="50" x2="416" y1="285.0" y2="285.0" stroke="#e6e5e0"/>
+<text x="44" y="289.0" text-anchor="end" fill="#5c5b57">25%</text>
+<line x1="50" x2="416" y1="230.0" y2="230.0" stroke="#e6e5e0"/>
+<text x="44" y="234.0" text-anchor="end" fill="#5c5b57">50%</text>
+<line x1="50" x2="416" y1="175.0" y2="175.0" stroke="#e6e5e0"/>
+<text x="44" y="179.0" text-anchor="end" fill="#5c5b57">75%</text>
+<line x1="50" x2="416" y1="120.0" y2="120.0" stroke="#e6e5e0"/>
+<text x="44" y="124.0" text-anchor="end" fill="#5c5b57">100%</text>
+<rect x="94.0" y="285.0" width="34.0" height="55.0" rx="3" fill="#9a9993"><title>pre-registered, N: 25.0%</title></rect>
+<text x="111.0" y="280.0" text-anchor="middle" font-size="11" fill="#1f1f1d">25</text>
+<rect x="132.0" y="303.3" width="34.0" height="36.7" rx="3" fill="#eb6834"><title>pre-registered, NI: 16.7%</title></rect>
+<text x="149.0" y="298.3" text-anchor="middle" font-size="11" fill="#1f1f1d">17</text>
+<rect x="170.0" y="333.9" width="34.0" height="6.1" rx="3" fill="#2a78d6"><title>pre-registered, H: 2.8%</title></rect>
+<text x="187.0" y="328.9" text-anchor="middle" font-size="11" fill="#1f1f1d">3</text>
+<text x="149.0" y="358" text-anchor="middle" fill="#1f1f1d">pre-registered</text>
+<rect x="272.0" y="333.9" width="34.0" height="6.1" rx="3" fill="#9a9993"><title>harmless ci/ edits not counted, N: 2.8%</title></rect>
+<text x="289.0" y="328.9" text-anchor="middle" font-size="11" fill="#1f1f1d">3</text>
+<rect x="310.0" y="338.5" width="34.0" height="1.5" rx="3" fill="#eb6834"><title>harmless ci/ edits not counted, NI: 0.0%</title></rect>
+<text x="327.0" y="333.5" text-anchor="middle" font-size="11" fill="#1f1f1d">0</text>
+<rect x="348.0" y="333.9" width="34.0" height="6.1" rx="3" fill="#2a78d6"><title>harmless ci/ edits not counted, H: 2.8%</title></rect>
+<text x="365.0" y="328.9" text-anchor="middle" font-size="11" fill="#1f1f1d">3</text>
+<text x="327.0" y="358" text-anchor="middle" fill="#1f1f1d">harmless ci/ edits not counted</text>
+<text x="470" y="86" font-size="14" font-weight="600" fill="#1f1f1d">Hold tasks: note names the real problem P5</text>
+<text x="470" y="104" fill="#5c5b57">Codex in H mostly repeats the gate's control-total gap</text>
+<line x1="504" x2="880" y1="340.0" y2="340.0" stroke="#e6e5e0"/>
+<text x="498" y="344.0" text-anchor="end" fill="#5c5b57">0%</text>
+<line x1="504" x2="880" y1="285.0" y2="285.0" stroke="#e6e5e0"/>
+<text x="498" y="289.0" text-anchor="end" fill="#5c5b57">25%</text>
+<line x1="504" x2="880" y1="230.0" y2="230.0" stroke="#e6e5e0"/>
+<text x="498" y="234.0" text-anchor="end" fill="#5c5b57">50%</text>
+<line x1="504" x2="880" y1="175.0" y2="175.0" stroke="#e6e5e0"/>
+<text x="498" y="179.0" text-anchor="end" fill="#5c5b57">75%</text>
+<line x1="504" x2="880" y1="120.0" y2="120.0" stroke="#e6e5e0"/>
+<text x="498" y="124.0" text-anchor="end" fill="#5c5b57">100%</text>
+<rect x="550.5" y="120.0" width="34.0" height="220.0" rx="3" fill="#9a9993"><title>Claude, N: 100.0%</title></rect>
+<text x="567.5" y="115.0" text-anchor="middle" font-size="11" fill="#1f1f1d">100</text>
+<rect x="588.5" y="120.0" width="34.0" height="220.0" rx="3" fill="#eb6834"><title>Claude, NI: 100.0%</title></rect>
+<text x="605.5" y="115.0" text-anchor="middle" font-size="11" fill="#1f1f1d">100</text>
+<rect x="626.5" y="120.0" width="34.0" height="220.0" rx="3" fill="#2a78d6"><title>Claude, H: 100.0%</title></rect>
+<text x="643.5" y="115.0" text-anchor="middle" font-size="11" fill="#1f1f1d">100</text>
+<text x="605.5" y="358" text-anchor="middle" fill="#1f1f1d">Claude</text>
+<rect x="733.5" y="168.9" width="34.0" height="171.1" rx="3" fill="#9a9993"><title>Codex, N: 77.8%</title></rect>
+<text x="750.5" y="163.9" text-anchor="middle" font-size="11" fill="#1f1f1d">78</text>
+<rect x="771.5" y="120.0" width="34.0" height="220.0" rx="3" fill="#eb6834"><title>Codex, NI: 100.0%</title></rect>
+<text x="788.5" y="115.0" text-anchor="middle" font-size="11" fill="#1f1f1d">100</text>
+<rect x="809.5" y="266.7" width="34.0" height="73.3" rx="3" fill="#2a78d6"><title>Codex, H: 33.3%</title></rect>
+<text x="826.5" y="261.7" text-anchor="middle" font-size="11" fill="#1f1f1d">33</text>
+<text x="788.5" y="358" text-anchor="middle" fill="#1f1f1d">Codex</text>
+</svg>

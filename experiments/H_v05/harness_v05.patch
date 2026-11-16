@@ -1,0 +1,1034 @@
+--- src/dsharness/context/semantic.py
++++ src/dsharness/context/semantic.py
+@@ -44,6 +44,8 @@
+     definition: str = ""
+     terms: tuple[str, ...] = ()   # regexes (lower-case text) for wording that names this metric
+     suppresses: tuple[str, ...] = ()        # less specific metrics this one overrides when both match
++    generic_terms: tuple[str, ...] = ()     # words that name it only by default ("sales", 销售额)
++    qualifiers: tuple[str, ...] = ()        # words that turn a default reading of a metric it suppresses into it
+     independent_record: str = ""            # table of an independent record that reconciles it (e.g. a finance close)
+ 
+ 
+@@ -142,7 +144,11 @@
+         terms = m.get("terms") or []
+         _require(isinstance(terms, list) and terms and all(isinstance(t, str) and t for t in terms),
+                  f"metric {name}: 'terms' (regexes for the wording that names it) is required")
+-        for t in terms:
++        generic, quals = m.get("generic_terms") or [], m.get("qualifiers") or []
++        for key, lst in (("generic_terms", generic), ("qualifiers", quals)):
++            _require(isinstance(lst, list) and all(isinstance(t, str) and t for t in lst),
++                     f"metric {name}: '{key}' must be a list of regexes")
++        for t in [*terms, *generic, *quals]:
+             try:
+                 re.compile(t)
+             except re.error as exc:
+@@ -150,6 +156,7 @@
+         sup = m.get("suppresses") or []
+         _require(isinstance(sup, list) and all(x in spec["metrics"] and x != name for x in sup),
+                  f"metric {name}: suppresses must name other metrics")
++        _require(not quals or sup, f"metric {name}: qualifiers refine a metric it suppresses; name it in suppresses")
+         record = str(m.get("independent_record", ""))
+         _require(record in ("", *CHECKABLE_RECORDS),
+                  f"metric {name}: independent_record {record!r} has no reconciliation check "
+@@ -158,7 +165,8 @@
+                                dimensions=mdims, caveats=[str(c) for c in m["caveats"]],
+                                label=str(m.get("label", name)), unit=str(m.get("unit", "")), type=mtype,
+                                definition=str(m.get("definition", "")).strip(), terms=tuple(terms),
+-                               suppresses=tuple(sup), independent_record=record)
++                               suppresses=tuple(sup), generic_terms=tuple(generic), qualifiers=tuple(quals),
++                               independent_record=record)
+     return SemanticModel(metrics=metrics, digest=digest(spec), dimensions=dims,
+                          coverage_sql=coverage.strip(), spec=spec, path=str(path))
+ 
+@@ -336,6 +344,73 @@
+             f"WITH {with_sql}\nSELECT {', '.join(keys)}, value\nFROM m_{metric}\nORDER BY {', '.join(keys)}")
+ 
+ 
++_EVENT_JOIN = re.compile(r"^b\.\w+ = s\.month$")
++
++
++def period_defined(spec: dict, metric: str) -> bool:
++    """A value over a whole window (H v0.5 F19) is defined for event metrics, whose rows fall in one month
++    (`month_join: b.<month> = s.month`): a customer who ordered in two months is one customer of the quarter.
++    A metric measured at a point in time (subscribers active at a month's start) has no period value."""
++    m = spec["metrics"][metric]
++    if m.get("type", "simple") == "ratio":
++        return period_defined(spec, m["numerator"]) and period_defined(spec, m["denominator"])
++    join = m.get("month_join") or spec["datasets"][m["dataset"]].get("month_join")
++    return bool(join) and _EVENT_JOIN.match(" ".join(str(join).split())) is not None
++
++
++def compile_metric_period(model: SemanticModel, metric: str, dimensions: list[str], months: tuple[str, str],
++                          filters: dict[str, str | list[str]] | None = None) -> str:
++    """SQL over silver.* returning (<dimensions...>, value) for the window `months` taken as ONE period (H v0.5
++    F19): a distinct count counts each key once over the window, a sum adds the months, an average is over all
++    rows, a ratio divides the window's numerator by its denominator. Only where `period_defined`."""
++    m, dims, flt = _validate_request(model, metric, dimensions, filters)
++    rng = _validate_months(months)
++    if rng is None:
++        raise ValueError("a value over a period needs months (first, last)")
++    if not period_defined(model.spec, metric):
++        raise ValueError(f"{metric} is measured at a point in time: it has no value over a whole period")
++    ctes: list[tuple[str, str]] = [("coverage", "  " + model.coverage_sql), ("spine", _spine_sql(rng))]
++    parts = ([metric] if m.type == "simple"
++             else [model.spec["metrics"][metric]["numerator"], model.spec["metrics"][metric]["denominator"]])
++    group = f"\n  GROUP BY {', '.join(dims)}" if dims else ""
++    for part in parts:
++        for cte in _simple_ctes(model, part, dims, flt)[:2]:        # the dataset and its facts, not the monthly body
++            if cte[0] not in {c[0] for c in ctes}:
++                ctes.append(cte)
++        raw = model.spec["metrics"][part]
++        measure = model.spec["datasets"][raw["dataset"]]["measures"][raw["measure"]]
++        agg = measure["agg"]
++        if agg in _ADDITIVE:
++            value = (f"CAST(COALESCE({_ADDITIVE[agg].format(x='measure')}, 0) AS "
++                     f"{measure.get('cast', 'bigint').upper()})")
++            having = ""
++        else:
++            value, having = f"CAST({_NON_ADDITIVE[agg].format(x='measure')} AS DOUBLE)", "\n  HAVING COUNT(measure) > 0"
++        ctes.append((f"p_{part}", f"  SELECT {', '.join([*dims, value + ' AS value'])}\n  FROM m_{part}_facts"
++                                  f"{group}{having}"))
++    if m.type == "ratio":
++        num, den = parts
++        on = " AND ".join(f"n.{d} IS NOT DISTINCT FROM d.{d}" for d in dims) or "TRUE"
++        ctes.append((f"p_{metric}",
++                     f"  SELECT {', '.join([*(f'd.{d}' for d in dims), 'CAST(COALESCE(n.value, 0) AS DOUBLE) / d.value AS value'])}\n"
++                     f"  FROM p_{den} d\n  LEFT JOIN p_{num} n ON {on}\n  WHERE d.value <> 0"))
++    with_sql = ",\n".join(f"{name} AS (\n{body}\n)" for name, body in ctes)
++    order = f"\nORDER BY {', '.join(dims)}" if dims else ""
++    return (f"-- metric: {metric} over {rng[0]}..{rng[1]} as one period | semantic_digest: {model.digest[:16]}\n"
++            f"WITH {with_sql}\nSELECT {', '.join([*dims, 'value'])}\nFROM p_{metric}{order}")
++
++
++def query_metric_period(con: duckdb.DuckDBPyConnection, model: SemanticModel, metric: str, dimensions: list[str],
++                        months: tuple[str, str], filters: dict[str, str | list[str]] | None = None) -> pd.DataFrame:
++    """Execute a governed metric over one whole period. Columns: <dimensions...>, value."""
++    sql = compile_metric_period(model, metric, dimensions, months, filters)
++    rng = _validate_months(months)
++    first, last = coverage(con, model)
++    if rng[0] < first or rng[1] > last:
++        raise ValueError(f"months {rng[0]}..{rng[1]} are outside this build's coverage {first}..{last}")
++    return con.execute(sql).df()
++
++
+ def coverage(con: duckdb.DuckDBPyConnection, model: SemanticModel) -> tuple[str, str]:
+     """(first_month, last_month) the build can report on. Raises ValueError if the ledger is empty."""
+     row = con.execute(model.coverage_sql).fetchone()
+--- src/dsharness/mcp_server.py
++++ src/dsharness/mcp_server.py
+@@ -72,8 +72,10 @@
+                      "them (if any) and, whenever the answer is a governed quantity, metric_call={metric, dimensions, "
+                      "months:[first,last], filters}. Rows carry the columns the question asks for (month only for one row "
+                      "per month, the dimension columns asked for) and 'value' at full precision. If the question "
+-                     "needs one step on the metric's rows (a total, average or pooled rate over the months, growth, "
+-                     "a share, a difference or ratio between two groups, a top-N, fen to CNY), declare it in derive. "
++                     "needs one step on the metric's rows (a total, average or pooled rate over the months, a value over "
++                     "the whole period with each customer counted once, growth between two months or two windows, "
++                     "the change for each month, a running total, a share, a difference or ratio between two "
++                     "groups, a top-N, a ratio of two metrics, fen to CNY), declare it in derive. "
+                      "Returns tier VERIFIED | CONSISTENT | FLAGGED, reasons, evidence ids and the "
+                      "answer_publish gate decision. Report the tier truthfully.",
+     "list_features": "Trusted point-in-time features (with SQL) and proposed features with their leakage status.",
+@@ -135,8 +137,10 @@
+                       claims: Annotated[list[str] | None, Field(description="Statements your answer makes")] = None,
+                       derive: Annotated[dict[str, Any] | None, Field(
+                           description="One declared step on the metric_call's governed rows, recomputed by the "
+-                                      "harness: {months: sum|mean|pool|growth, across: {op: share|difference|ratio|top, "
+-                                      "dimension, a, b, n}, keep: {dimension: values}, unit: cny|percent}")] = None
++                                      "harness: {months: sum|mean|pool|growth|cumsum|change|total, windows: [[m1, m2], "
++                                      "[m3, m4]] (growth between two windows), across: {op: share|difference|ratio|"
++                                      "top, dimension, a, b, n}, keep: {dimension: values}, divide_by: {metric, "
++                                      "filters} (ratio of two metrics), unit: cny|percent}")] = None
+                       ) -> dict[str, Any]:
+         return T.submit_answer(ctx, question, answer_rows, sql=sql, metric_call=metric_call, claims=claims or [],
+                                derive=derive)
+--- src/dsharness/tools/analytics.py
++++ src/dsharness/tools/analytics.py
+@@ -60,7 +60,8 @@
+ from ..context.catalog import Catalog, describe_table as _describe_table, load_catalog, search_catalog as _search
+ from ..context.semantic import (SemanticModel, compile_metric, coverage, describe_metric as _describe_metric,
+                                 list_metrics as _list_metrics, load_semantic_model, load_verified_queries,
+-                                metric_definition_digest, query_metric as _query_metric)
++                                metric_definition_digest, query_metric as _query_metric,
++                                query_metric_period as _query_metric_period)
+ from ..evidence import EvidenceStore, decide
+ from ..evidence.attest import CERTIFICATE_LOG
+ from ..evidence.records import iso_utc
+@@ -88,13 +89,17 @@
+                "pooled rate, growth between two months, a share of the total, a difference or ratio between two "
+                "groups, a top-N, fen to CNY), submit the result of that step with this metric_call and declare the "
+                "step in `derive`; the harness recomputes it.")
+-_DERIVE_SYNTAX = ("submit_answer.derive declares one arithmetic step on the governed rows: {months: sum|mean|pool|growth|cumsum, "
++_DERIVE_SYNTAX = ("submit_answer.derive declares one arithmetic step on the governed rows: {months: sum|mean|pool|growth|cumsum|change|total, "
+                   "across: {op: share|difference|ratio|top, dimension (or 'month'), a, b, n}, keep: {dimension: values the "
+-                  "question names}, unit: cny|percent}. ")
++                  "question names}, unit: cny|percent, windows: [[first, last], [first, last]] (growth from one period to "
++                  "another), divide_by: {metric, filters} (a ratio of two governed metrics: per customer, per order, "
++                  "share of customers)}. ")
+ _DERIVE_EXAMPLE = ("Example: 'Q1 2026 net revenue in CNY' -> metric_call {metric: net_revenue_fen, "
+                    "dimensions: [], months: [2026-01, 2026-03]} with derive {months: sum, unit: cny} and one row "
+                    "{value: ...}. ")
+-_DERIVE_TAIL = ("'pool' recomputes a rate over several months from its counts; 'cumsum' is a running total and keeps "
++_DERIVE_TAIL = ("'total' is the metric over the declared months as one period (each customer counted once); "
++                "'pool' recomputes a rate over several months from its counts; 'change' is each month's change from "
++                "the month before (declare the base month too; it is not reported); 'cumsum' is a running total and keeps "
+                 "one row per month; a distinct count cannot be summed over months.")
+ DERIVE_GUIDANCE = _DERIVE_SYNTAX + _DERIVE_EXAMPLE + _DERIVE_TAIL
+ 
+@@ -303,11 +308,30 @@
+ _FULL_MONTH_NAMES = [n for n in _MONTH_NAMES if len(n) > 4 or n in ("june", "july")] + ["may"]
+ 
+ 
++_QUALIFIER_REACH = 16            # characters before a generic term in which a qualifier refines it
++
++
+ def match_governed_metrics(model: SemanticModel, text: str) -> list[str]:
+-    """Governed metrics a question or claim talks about (most specific reading wins)."""
++    """Governed metrics a question or claim talks about (most specific reading wins).
++
++    A metric named only by one of its generic_terms ("sales", 销售额) is the default reading; a qualifier of a
++    metric that suppresses it ("gross", 毛) just before the generic word makes that metric the reading instead
++    (H v0.5 F23, E3a R-H08 / R-L40 / R-H14: 毛产品销售额 was read as net sales and one agent switched to net
++    because of it). Only just before: "sales excluding cancelled orders" is still the default reading."""
+     low = text.lower()
+-    hits = {name for name, m in model.metrics.items() if any(re.search(t, low) for t in m.terms)}
+-    for name in list(hits):
++    strong = {name for name, m in model.metrics.items() if any(re.search(t, low) for t in m.terms)}
++    default: set[str] = set()
++    for name, m in model.metrics.items():
++        if name in strong:
++            continue
++        starts = [mt.start() for t in m.generic_terms for mt in re.finditer(t, low)]
++        if starts:
++            refined = {r for r, rm in model.metrics.items() if name in rm.suppresses and any(
++                re.search(q, low[max(0, i - _QUALIFIER_REACH):i]) for q in rm.qualifiers for i in starts)}
++            strong |= refined
++            default |= set() if refined else {name}
++    hits = strong | default
++    for name in strong:             # a default reading is weak: it suppresses nothing
+         hits -= set(model.metrics[name].suppresses)
+     if {"active_subscribers_eom", "active_subscribers_bom"} <= hits:
+         if re.search(r"\b(start|beginning|begin|opening)\b", low):
+@@ -342,6 +366,9 @@
+ 
+     take(rf"\b({_MN})\.?\s*(?:to|through|thru|until|-|–)\s*({_MN})\.?,?\s+(\d{{4}})\b",
+          lambda mt: span(int(mt[3]), _MONTH_NAMES[mt[1]], _MONTH_NAMES[mt[2]]))
++    # E3a R-H07: "each month of 2025 through November" is January to November, not the whole year (H v0.5 F26)
++    take(rf"\b(\d{{4}})\s*,?\s+(?:through|thru|up\s+to|until|to)\s+({_MN})\b(?!\.?,?\s+\d{{4}})",
++         lambda mt: span(int(mt[1]), 1, _MONTH_NAMES[mt[2]]))
+     take(rf"\b({_MN})\.?,?\s+(\d{{4}})\b", lambda mt: [_ym(int(mt[2]), _MONTH_NAMES[mt[1]])])
+     take(r"\b(first|second|third|fourth|1st|2nd|3rd|4th)\s+quarter\s+(?:of\s+)?(\d{4})\b",
+          lambda mt: span(int(mt[2]), 3 * _ORDINAL[mt[1]] - 2, 3 * _ORDINAL[mt[1]]))
+@@ -620,6 +647,23 @@
+     return out, notes
+ 
+ 
++def ungoverned_keys(rows: list[dict], call: dict, allowed: list[str]) -> list[str]:
++    """Columns that key the answer rows (text or whole numbers, more than one value) but are not a dimension the
++    declared metric has (E3a R-H29: a right top-5 by item code FAILED as 'rows lack a month column')."""
++    cols: list[str] = []
++    for r in rows:
++        cols += [c for c in r if c not in cols]
++    known = {"month", "value", call["metric"], *call["dimensions"], *allowed}
++    out = []
++    for c in cols:
++        vals = [r.get(c) for r in rows if r.get(c) is not None]
++        if c in known or not vals or any(isinstance(v, (float, np.floating, Decimal)) for v in vals):
++            continue
++        if len({str(v).strip() for v in vals}) > 1:
++            out.append(c)
++    return out
++
++
+ # =========================================================================== honesty (re-execution)
+ def _canon(v):
+     if v is None or (isinstance(v, float) and math.isnan(v)):
+@@ -641,16 +685,42 @@
+     return tuple((tag, f"{val:.9g}" if tag == "num" else str(val)) for tag, val in row)
+ 
+ 
++def _pair_columns(a_cols: list[str], query_cols: list[str], query_rows: list[tuple]) -> tuple[dict, list[str]] | None:
++    """Answer column -> SQL column, or None. Same names pair; one column left on each side pairs too (the answer
++    must call the value 'value', the SQL may not: E3a, 23 right answers FAILED on `AS v`); SQL columns left over
++    with numbers in every row are helpers the answer may leave out. Anything else is a mismatch."""
++    pairs = {c: c for c in a_cols if c in query_cols}
++    a_left = [c for c in a_cols if c not in pairs]
++    q_left = [c for c in query_cols if c not in pairs.values()]
++    notes = []
++    if len(a_left) == 1 and len(q_left) == 1:
++        pairs[a_left[0]] = q_left[0]
++        notes.append(f"answer column {a_left[0]!r} compared with SQL column {q_left[0]!r}")
++    elif a_left:
++        return None
++    elif q_left:
++        idx = [query_cols.index(c) for c in q_left]
++        if not query_rows or not all(_canon(t[i])[0] == "num" for t in query_rows for i in idx):
++            return None
++        notes.append(f"SQL helper column(s) {q_left} not in the answer")
++    return pairs, notes
++
++
+ def compare_row_multisets(answer_rows: list[dict], query_cols: list[str], query_rows: list[tuple]) -> dict:
+-    """Order-insensitive row comparison: same columns, same rows, numbers within 1e-9 (relative)."""
++    """Order-insensitive row comparison: same columns (see _pair_columns), same rows, numbers within 1e-9
++    (relative)."""
+     a_cols = sorted(set().union(*(r.keys() for r in answer_rows))) if answer_rows else []
+-    q_cols = sorted(query_cols)
+     base = {"n_answer_rows": len(answer_rows), "n_query_rows": len(query_rows), "query_columns": query_cols}
+-    if answer_rows and a_cols != q_cols:
++    paired = _pair_columns(a_cols, query_cols, query_rows) if answer_rows else ({c: c for c in query_cols}, [])
++    if paired is None:
+         return {**base, "outcome": "FAIL", "answer_columns": a_cols,
+-                "reason": f"answer columns {a_cols} differ from the columns the SQL returns {q_cols}"}
++                "reason": f"answer columns {a_cols} differ from the columns the SQL returns {sorted(query_cols)}"}
++    pairs, col_notes = paired
++    if col_notes:
++        base["column_notes"] = col_notes
++    q_cols = sorted(pairs, key=str)
+     a = sorted((tuple(_canon(r.get(c)) for c in q_cols) for r in answer_rows), key=_sort_key)
+-    idx = [query_cols.index(c) for c in q_cols]
++    idx = [query_cols.index(pairs[c]) for c in q_cols]
+     q = sorted((tuple(_canon(t[i]) for i in idx) for t in query_rows), key=_sort_key)
+     if len(a) != len(q):
+         return {**base, "outcome": "FAIL",
+@@ -753,6 +823,11 @@
+             derived = normalize_derive(derive, declared["metric"], model.spec, declared)
+         except DeriveError as exc:
+             raise ValueError(str(exc)) from None
++        if derived and derived.get("divide_by"):           # the denominator is a governed call of its own
++            _validate_call_on_build(ctx, normalize_metric_call({"metric": derived["divide_by"]["metric"],
++                                                                "dimensions": declared["dimensions"],
++                                                                "months": declared["months"],
++                                                                "filters": derived["divide_by"]["filters"]}))
+     text = " ".join([question, *claims])
+     reasons: list[str] = []
+     warnings: list[str] = []
+@@ -800,7 +875,7 @@
+ 
+     # ---- 2. honesty: re-execute ---------------------------------------------------------
+     governed = None
+-    shaped, shape_notes, shape_error = None, [], None
++    shaped, shape_notes, shape_error, ungoverned = None, [], None, []
+     if call is not None and derived is not None:
+         governed = _derived_check(ctx, model, call, derived, rows)
+     elif call is not None:
+@@ -808,6 +883,11 @@
+             shaped, shape_notes = shape_for_metric(rows, call, call["metric"])
+         except _ShapeError as exc:
+             shape_error = str(exc)
++            ungoverned = ungoverned_keys(rows, call, model.metrics[call["metric"]].dimensions)
++            if ungoverned:      # the rows answer a breakdown no governed metric has: unknown, not wrong
++                shape_error = (f"the rows are keyed by {ungoverned}, which {call['metric']} has no dimension for "
++                               f"(it has {['month', *model.metrics[call['metric']].dimensions]}); no governed metric "
++                               f"covers this breakdown")
+         if shaped is not None:
+             governed = reconcile_answer_to_metric(ctx.con, model, shaped, call["metric"], call["dimensions"],
+                                                   call["months"], call["filters"],
+@@ -820,6 +900,8 @@
+     elif declared is not None:
+         if governed is not None:
+             reexec = {**_summ(governed), "source": "governed_metric_call" + ("+derive" if derived else "")}
++        elif ungoverned:
++            reexec = {"outcome": "INCONCLUSIVE", "reason": shape_error}
+         else:
+             reexec = {"outcome": "FAIL", "reason": f"answer does not match its declared claim: {shape_error}"}
+     else:
+@@ -842,6 +924,10 @@
+         if mentioned:
+             reasons.append(f"the question mentions governed metric(s) {mentioned}: declare metric_call so the answer "
+                            f"can be reconciled" + (f" ({'; '.join(infer_notes)})" if infer_notes else ""))
++    elif shape_error is not None and ungoverned:
++        recon["outcome"] = "INCONCLUSIVE"
++        recon["reason"] = shape_error
++        reasons.append(f"exploratory: {shape_error} (needs human review)")
+     elif shape_error is not None:
+         if call_source == "declared":       # the agent's own claim and rows disagree: a verdict, not an error
+             recon["outcome"] = "FAIL"
+@@ -1232,7 +1318,20 @@
+         if derived["months"] == "pool":
+             raw = model.spec["metrics"][call["metric"]]
+             parts = (q(raw["numerator"]), q(raw["denominator"]))
+-        expected, keys = apply_derive(df, derived, call["dimensions"], parts=parts, months=call["months"])
++        period = lambda metric, months, filters: run_with_timeout(  # noqa: E731
++            ctx.con, QUERY_TIMEOUT_S, lambda: _query_metric_period(ctx.con, model, metric, call["dimensions"], months,
++                                                                   filters))
++        inputs: dict = {}
++        if derived["months"] == "total":
++            inputs["period"] = period(call["metric"], call["months"], call["filters"])
++        if derived.get("windows"):
++            inputs["windows"] = [period(call["metric"], w, call["filters"]) for w in derived["windows"]]
++        if derived.get("divide_by"):
++            den = derived["divide_by"]
++            inputs["den"] = (period(den["metric"], call["months"], den["filters"]) if derived["months"] == "total" else
++                             run_with_timeout(ctx.con, QUERY_TIMEOUT_S, lambda: _query_metric(
++                                 ctx.con, model, den["metric"], call["dimensions"], call["months"], den["filters"])))
++        expected, keys = apply_derive(df, derived, call["dimensions"], parts=parts, months=call["months"], inputs=inputs)
+     except DeriveError as exc:
+         return {"outcome": "INCONCLUSIVE", "reason": f"the declared step cannot be computed: {exc}"}
+     except (duckdb.Error, ValueError) as exc:
+--- src/dsharness/tools/derive.py
++++ src/dsharness/tools/derive.py
+@@ -8,9 +8,11 @@
+ the step, the harness recomputes it from the governed rows, and the submitted rows must equal the
+ harness's result.
+ 
+-    derive = {"months": "sum" | "mean" | "pool" | "growth" | "cumsum" | None,
++    derive = {"months": "sum" | "mean" | "pool" | "growth" | "cumsum" | "change" | "total" | None,
++              "windows": [[first, last], [first, last]] | None,     # growth between two periods (v0.5 F20)
++              "divide_by": {"metric": m, "filters": {...}} | None,  # ratio of two governed metrics (v0.5 F18)
+               "across": {"op": "share" | "difference" | "ratio" | "top", "dimension": d | "month",
+-                         "a": v, "b": v, "n": k} | None,      # share: optional a = the member reported
++                         "a": v, "b": v, "n": k} | None,      # share: optional a, b = the members reported
+               "keep": {dimension: value | [values]} | None,
+               "unit": "cny" | "percent" | None}
+ 
+@@ -28,6 +30,21 @@
+ - `growth` is (last month - first month) / first month of the declared months;
+ - `cumsum` is the running total since the first declared month (H v0.3 F17); unlike the others it
+   keeps one row per month, and like `sum` only for metrics whose monthly values add up.
++- `change` is each month's change from the month before, (this - previous) / previous (H v0.5 F21,
++  "month-over-month change for each month"); it keeps one row per month and drops the first declared
++  month, which is only the base.
++- `total` is the metric over the declared months taken as one period (H v0.5 F19), computed by the
++  harness from the line rows: a distinct count counts each customer or order once (customers who
++  ordered in two months of a quarter are one customer of the quarter), a sum adds the months, a ratio
++  divides the period's numerator by its denominator. Only for event metrics (`period_defined`).
++- `growth` with `windows` compares two periods, each taken as one period like `total` (H v0.5 F20):
++  "Q3 against Q2", "January-November against the same months a year earlier". Without `windows` it
++  compares the first and last declared month, as before.
++
++`divide_by` (H v0.5 F18) divides the metric by a second governed metric at the same months, dimensions
++and filters (or its own filters): sales per active customer, units per order, new customers as a share
++of active customers. It runs after the months step (per month, or over the period with `total`) and
++before `across`, `keep` and `unit`.
+ """
+ from __future__ import annotations
+ 
+@@ -37,7 +54,9 @@
+ 
+ import pandas as pd
+ 
+-MONTH_OPS = ("sum", "mean", "pool", "growth", "cumsum")
++from ..context.semantic import period_defined
++
++MONTH_OPS = ("sum", "mean", "pool", "growth", "cumsum", "change", "total")
+ ACROSS_OPS = ("share", "difference", "ratio", "top")
+ UNITS = ("cny", "percent")
+ REL_TOL = 1e-9
+@@ -52,10 +71,11 @@
+     """Validate a declared derivation against the metric spec and the metric_call. None = no derivation."""
+     if raw is None:
+         return None
+-    if not isinstance(raw, dict) or set(raw) - {"months", "across", "keep", "unit"}:
+-        raise DeriveError("derive must be an object with keys months, across, keep, unit")
++    if not isinstance(raw, dict) or set(raw) - {"months", "across", "keep", "unit", "windows", "divide_by"}:
++        raise DeriveError("derive must be an object with keys months, across, keep, unit, windows, divide_by")
+     months, across, keep, unit = raw.get("months"), raw.get("across"), raw.get("keep"), raw.get("unit")
+-    if months is None and across is None and keep is None and unit is None:
++    windows, divide_by = raw.get("windows"), raw.get("divide_by")
++    if all(x is None for x in (months, across, keep, unit, windows, divide_by)):
+         return None
+     m = spec["metrics"][metric]
+     mtype = m.get("type", "simple")
+@@ -69,6 +89,18 @@
+             raise DeriveError(f"'pool' recomputes a rate from its counts; {metric} is not a ratio metric")
+         if months == "growth" and not call.get("months"):
+             raise DeriveError("'growth' needs metric_call.months (first and last month)")
++        if months == "total" and not period_defined(spec, metric):
++            raise DeriveError(f"{metric} is measured at a point in time: it has no value over a whole period; use "
++                              f"'mean' for an average of monthly values, or ask a human")
++        if months == "total" and not call.get("months"):
++            raise DeriveError("'total' needs metric_call.months (the period)")
++        if months == "change" and not (call.get("months") and call["months"][0] < call["months"][1]):
++            raise DeriveError("'change' needs metric_call.months to start one month before the first month reported "
++                              "(that month is the base)")
++    if windows is not None:
++        windows = _windows(windows, months, metric, spec, call)
++    if divide_by is not None:
++        divide_by = _divide_by(divide_by, months, spec, call)
+     if across is not None:
+         if not isinstance(across, dict) or across.get("op") not in ACROSS_OPS:
+             raise DeriveError(f"derive.across.op must be one of {list(ACROSS_OPS)}")
+@@ -105,7 +137,71 @@
+             raise DeriveError(f"derive.unit must be one of {list(UNITS)}")
+         if unit == "cny" and m.get("unit") != "fen":
+             raise DeriveError(f"'cny' converts fen to CNY; {metric} is in {m.get('unit')}")
+-    return {"months": months, "across": across, "keep": keep, "unit": unit}
++    out = {"months": months, "across": across, "keep": keep, "unit": unit}
++    # the v0.5 keys appear only when used, so a v0.4 derivation (and its certificate) is unchanged
++    out.update({k: v for k, v in (("windows", windows), ("divide_by", divide_by)) if v is not None})
++    return out
++
++
++def _windows(windows, months, metric: str, spec: dict, call: dict) -> list[tuple[str, str]]:
++    """Two periods for growth, each inside metric_call.months: [[base first, base last], [first, last]]."""
++    if months != "growth":
++        raise DeriveError("derive.windows goes with months = 'growth': growth from the first window to the second")
++    if (not isinstance(windows, (list, tuple)) or len(windows) != 2
++            or not all(isinstance(w, (list, tuple)) and len(w) == 2 for w in windows)):
++        raise DeriveError("derive.windows must be two month ranges: [[base first, base last], [first, last]]")
++    first, last = call.get("months") or (None, None)
++    out = []
++    for a, b in windows:
++        a, b = str(a), str(b)
++        if not (_is_month(a) and _is_month(b) and a <= b):
++            raise DeriveError(f"derive.windows: {[a, b]} is not a month range (YYYY-MM, first <= last)")
++        if not (first and first <= a and b <= last):
++            raise DeriveError(f"derive.windows: {[a, b]} must lie inside metric_call.months {[first, last]}")
++        out.append((a, b))
++    (a0, b0), (a1, b1) = out
++    length = lambda a, b: (int(b[:4]) - int(a[:4])) * 12 + int(b[5:]) - int(a[5:])   # noqa: E731
++    back_to_back = shift_month(b0, 1) == a1 and length(a0, b0) == length(a1, b1)
++    year_apart = (shift_month(a0, 12), shift_month(b0, 12)) == (a1, b1)
++    if not (back_to_back or year_apart):
++        raise DeriveError("derive.windows must be two periods of the same length, back to back (Q2 then Q3) or a "
++                          "year apart (Jan-Nov 2024 then Jan-Nov 2025), base first")
++    if not period_defined(spec, metric):
++        raise DeriveError(f"{metric} is measured at a point in time: it has no value over a whole window")
++    return out
++
++
++def _divide_by(raw, months, spec: dict, call: dict) -> dict:
++    """The second governed metric of a ratio (numerator = metric_call). Same months and dimensions;
++    filters default to metric_call.filters."""
++    if not isinstance(raw, dict) or set(raw) - {"metric", "filters"} or not isinstance(raw.get("metric"), str):
++        raise DeriveError("derive.divide_by must be {metric, filters}: the governed metric to divide by")
++    name = raw["metric"]
++    if name not in spec["metrics"]:
++        raise DeriveError(f"derive.divide_by.metric {name!r} is not a governed metric (see list_metrics)")
++    if months not in (None, "total"):
++        raise DeriveError("derive.divide_by divides month by month (no months step) or over the period "
++                          "(months = 'total'); other month steps cannot be combined with it")
++    if months == "total" and not period_defined(spec, name):
++        raise DeriveError(f"{name} is measured at a point in time: it has no value over a whole period")
++    allowed = spec["metrics"][name].get("dimensions") or []
++    bad = [d for d in call["dimensions"] if d not in allowed]
++    if bad:
++        raise DeriveError(f"{name} has no dimension {bad[0]!r}: the two metrics must share the breakdown")
++    filters = raw.get("filters")
++    if filters is not None and not isinstance(filters, dict):
++        raise DeriveError("derive.divide_by.filters must be an object dimension -> value(s)")
++    return {"metric": name, "filters": call.get("filters") if filters is None else (filters or None)}
++
++
++def _is_month(v: str) -> bool:
++    return len(v) == 7 and v[4] == "-" and v[:4].isdigit() and v[5:].isdigit() and 1 <= int(v[5:]) <= 12
++
++
++def shift_month(m: str, k: int) -> str:
++    """'YYYY-MM' moved by k months."""
++    y, mo = int(m[:4]), int(m[5:7]) - 1 + k
++    return f"{y + mo // 12:04d}-{mo % 12 + 1:02d}"
+ 
+ 
+ def month_rollup(spec: dict, metric: str) -> str | None:
+@@ -120,16 +216,28 @@
+ 
+ 
+ def apply_derive(rows: pd.DataFrame, d: dict, dims: list[str], parts: tuple[pd.DataFrame, pd.DataFrame] | None = None,
+-                 months: tuple[str, str] | None = None) -> tuple[pd.DataFrame, list[str]]:
++                 months: tuple[str, str] | None = None, inputs: dict | None = None) -> tuple[pd.DataFrame, list[str]]:
+     """Governed rows (month, *dims, value) -> (derived rows, their key columns).
+ 
+-    `parts` = (numerator rows, denominator rows) with the same keys, needed for months='pool'."""
++    `parts` = (numerator rows, denominator rows) with the same keys, needed for months='pool'. `inputs` holds the
++    other governed frames a step needs, fetched by the caller: "period" (dims, value) for months='total',
++    "windows" (two such frames) for growth between windows, "den" (the divide_by metric, monthly or per period)."""
+     df = rows.copy()
+     keys = ["month", *dims]
+     op = d["months"]
++    inputs = inputs or {}
+     if op is not None:
+         rest = [k for k in keys if k != "month"]
+-        if op == "pool":
++        if op == "total":
++            df = inputs["period"][[*rest, "value"]].copy()
++        elif op == "growth" and d.get("windows"):
++            a = inputs["windows"][0][[*rest, "value"]].rename(columns={"value": "v0"})
++            b = inputs["windows"][1][[*rest, "value"]].rename(columns={"value": "v1"})
++            df = a.merge(b, on=rest) if rest else pd.concat([a.reset_index(drop=True), b.reset_index(drop=True)], axis=1)
++            df = df[df["v0"] != 0]
++            df["value"] = (df["v1"].astype(float) - df["v0"].astype(float)) / df["v0"].astype(float)
++            df = df[[*rest, "value"]]
++        elif op == "pool":
+             num, den = parts
+             n = _total(num, rest).rename(columns={"value": "num"})
+             dn = _total(den, rest).rename(columns={"value": "den"})
+@@ -149,12 +257,25 @@
+             df = df.sort_values("month")
+             df["value"] = df.groupby(rest, dropna=False)["value"].cumsum() if rest else df["value"].cumsum()
+             df = df[[*keys, "value"]]
++        elif op == "change":       # each month against the calendar month before; the first month is only the base
++            # (a rate or average omits months with no data, so the row before is not always the month before)
++            base = df.assign(month=df["month"].map(lambda m: shift_month(m, 1))).rename(columns={"value": "prev"})
++            df = df.merge(base[[*keys, "prev"]], on=keys)
++            df = df[df["prev"].notna() & (df["prev"].astype(float) != 0)]
++            df = df.assign(value=(df["value"].astype(float) - df["prev"].astype(float)) / df["prev"].astype(float))
++            df = df.sort_values(keys)[[*keys, "value"]]
+         else:
+             df = (_total(df, rest) if op == "sum" else
+                   (df.groupby(rest, as_index=False, dropna=False)["value"].mean() if rest
+                    else pd.DataFrame({"value": [df["value"].astype(float).mean()]})))
+-        if op != "cumsum":
++        if op not in ("cumsum", "change"):
+             keys = rest
++    if d.get("divide_by"):
++        den = inputs["den"][[*keys, "value"]].rename(columns={"value": "den"})
++        df = df.merge(den, on=keys, how="inner") if keys else pd.concat(
++            [df.reset_index(drop=True), den.reset_index(drop=True)], axis=1)
++        df = df[df["den"].astype(float) != 0]
++        df = df.assign(value=df["value"].astype(float) / df["den"].astype(float))[[*keys, "value"]]
+     ac = d["across"]
+     if ac is not None:
+         dim = ac["dimension"]
+@@ -162,10 +283,12 @@
+         if ac["op"] == "share":
+             tot = df.groupby(other, dropna=False)["value"].transform("sum") if other else df["value"].sum()
+             df = df.assign(value=df["value"].astype(float) / tot)
+-            if ac.get("a") is not None:    # "the west region's share": a names the member reported (as keep)
+-                df = df[df[dim].astype(str) == str(ac["a"])]
+-                if df.empty:
+-                    raise DeriveError(f"no governed rows for {dim} = {ac['a']!r}")
++            named = [str(x) for x in (ac.get("a"), ac.get("b")) if x is not None]
++            if named:                      # "the west region's share": a (and b) name the members reported (as keep)
++                df = df[df[dim].astype(str).isin(named)]
++                missing = sorted(set(named) - set(df[dim].astype(str)))
++                if missing:
++                    raise DeriveError(f"no governed rows for {dim} = {missing[0]!r}")
+         elif ac["op"] == "top":
+             df = (df.sort_values([*other, "value"], ascending=[True] * len(other) + [False])
+                   .groupby(other, dropna=False, sort=False).head(ac["n"]) if other
+@@ -246,6 +369,10 @@
+         got[k] = r.get("value")
+     if set(got) != set(exp):
+         reason = f"rows {sorted(got)[:4]} != derived rows {sorted(exp)[:4]}"
++        if exp and set(got) > set(exp):    # E3a R-L40: both markets' shares answered, derive kept only a = UK
++            reason += ("; the answer has rows the declared step leaves out: if the question asks for them, name them "
++                       "all (derive.across.a and b, or derive.keep) or leave the member out of the step so every row "
++                       "is derived")
+         if got and set(got) < set(exp):    # E1b: "the west region's share" answered with the west row only
+             named = [r for r in expected.to_dict("records") if key(r) in got]
+             pick = {k: sorted({str(r[k]) for r in named}) for k in keys
+--- src/dsharness/tools/shape.py
++++ src/dsharness/tools/shape.py
+@@ -79,6 +79,8 @@
+ 
+ _MONTHLY_MEAN = re.compile(r"\b(?:average|mean|avg)\s+(?:per\s+month|monthly)\b|\bmonthly\s+(?:average|mean)\b|"
+                            r"\bper\s+month\s+on\s+average\b|月均|平均每(?:个)?月|每月平均", re.I)
++_TO_DATE = re.compile(r"\bcumulative\b|\brunning total\b|\byear[- ]to[- ]date\b|\bytd\b|\bto date\b|\bso far\b|"
++                      r"累计|截至|截止", re.I)
+ _PERIOD_TOTAL = re.compile(r"\b(?:total|combined|altogether|in\s+all|cumulative)\b|合计|总共|累计|总计|一共", re.I)
+ 
+ 
+@@ -101,18 +103,19 @@
+     months the question names (first, last) if they could be read."""
+     out: list[str] = []
+     d = derive or {"months": None, "across": None, "unit": None}
+-    collapsed = d["months"] not in (None, "cumsum") or (d.get("across") or {}).get("dimension") == "month"
++    collapsed = d["months"] not in (None, "cumsum", "change") or (d.get("across") or {}).get("dimension") == "month"
+     several = q_months is not None and q_months[0] != q_months[1]
+     if several and not asks_per_month(question) and not collapsed and "month" not in (call.get("dimensions") or []):
+         # one value (per group) over several months was asked; monthly rows are not that answer
+         out.append(f"the question asks for one value over {q_months[0]}..{q_months[1]}, but the answer has one row "
+-                   f"per month; declare derive.months (sum, mean, pool or growth) and submit the derived rows")
+-    if d["months"] not in (None, "cumsum") and asks_per_month(question):
++                   f"per month; declare derive.months (sum, mean, pool, total or growth) and submit the derived rows")
++    if d["months"] not in (None, "cumsum", "change") and asks_per_month(question):
+         out.append("the question asks for one row per month, but derive.months collapses the months")
+-    if d["months"] in ("sum", "pool") and asks_monthly_mean(question):
++    if d["months"] in ("sum", "pool", "total") and asks_monthly_mean(question):
+         out.append(f"the question asks for an average per month, but derive.months is {d['months']!r}; use 'mean'")
+     if d["months"] == "mean" and _PERIOD_TOTAL.search(question) and not asks_monthly_mean(question):
+         out.append("the question asks for a total over the period, but derive.months is 'mean'")
++    out += _span_contradictions(question, call, d, q_months)
+     unit = asked_unit(question)
+     if metric_unit == "fen":
+         if unit == "cny" and d["unit"] != "cny":
+@@ -120,3 +123,36 @@
+         if unit == "fen" and d["unit"] == "cny":
+             out.append("the question asks for fen but derive.unit converts to CNY")
+     return out
++
++
++def _span_contradictions(question: str, call: dict, d: dict, q_months: tuple[str, str] | None) -> list[str]:
++    """A step that combines the months (a total, average, pooled rate, growth, a month's share or the top month)
++    must combine exactly the months the question names. The claim check alone allows a wider call (the asked rows
++    are still in a per-month answer), but a Q1 total declared over December to March is another number (found by
++    the v0.5 blind review). A running total must start where the question starts; growth windows must be the
++    question's periods. Only a cleanly read scope is used: a list such as "January and February 2026" reads as
++    February alone, and equality with an under-read scope would contradict right answers (E1b C-H39)."""
++    from .derive import shift_month
++    cm = tuple(call.get("months") or ()) or None
++    q = tuple(q_months) if q_months else None
++    if not (q and cm):
++        return []
++    op, across, w = d["months"], d.get("across") or {}, d.get("windows")
++    if w:
++        if q not in ((w[0][0], w[1][1]), tuple(w[1])):
++            return [f"the question names {q[0]}..{q[1]}, but derive.windows compare {w[0][0]}..{w[0][1]} with "
++                    f"{w[1][0]}..{w[1][1]}"]
++        return []
++    if cm == q:
++        return []
++    if op == "growth" and q[0] == q[1] and cm in ((shift_month(q[1], -1), q[1]), (shift_month(q[1], -12), q[1])):
++        return []           # one month against the month before or the same month a year earlier
++    if op == "sum" and _TO_DATE.search(question):
++        return []           # "cumulative revenue at the end of May": a sum from an earlier start (E1b C-H32)
++    if op in ("sum", "mean", "pool", "total", "growth") or (
++            op is None and across.get("dimension") == "month" and across.get("op") in ("top", "share")):
++        return [f"the step combines every month of metric_call.months {cm[0]}..{cm[1]}, but the question names "
++                f"{q[0]}..{q[1]}; declare exactly those months"]
++    if op == "cumsum" and cm[0] != q[0]:
++        return [f"a running total starts at metric_call.months[0] {cm[0]}, but the question starts at {q[0]}"]
++    return []
+--- tests/test_answer_v05.py
++++ tests/test_answer_v05.py
+@@ -0,0 +1,348 @@
++"""H v0.5 regression tests built from E3a arm-H false holds and harness-induced errors
++(docs/experiments/H_v0.5_PLAN.md). The synthetic world stands in for the retail one: each test keeps
++the shape of the E3a question it cites. As in test_answer_v02, expected values are computed here from
++the governed rows with plain pandas, independently of `tools/derive.py`."""
++from __future__ import annotations
++
++import pytest
++
++from dsharness import tools as T
++from dsharness.tools.analytics import months_from_text
++
++from test_answer_v02 import private_ws, rows, verdict
++
++
++@pytest.fixture(scope="module")
++def analyst(small_ws, tmp_path_factory):
++    ctx = T.make_context(private_ws(small_ws, tmp_path_factory.mktemp("v05") / "ws"), "score", "analyst",
++                         "agent:analyst-v05")
++    yield ctx
++    ctx.close()
++
++
++def test_year_through_a_month_is_january_to_that_month():
++    """F26, E3a R-H07: 'each month of 2025 through November' was read as all of 2025, so every right call
++    (2025-01..2025-11, or 2024-12..2025-11 with the base month) was contradicted."""
++    q = ("Show me the month-over-month percentage change in gross product sales for each month of 2025 through "
++         "November, as a percent (for example, 12.5 means up 12.5%).")
++    assert months_from_text(q) == (("2025-01", "2025-11"), None)
++    assert months_from_text("for each month of 2026 up to March") == (("2026-01", "2026-03"), None)
++    # an explicit range is unchanged
++    assert months_from_text("from January through November 2025") == (("2025-01", "2025-11"), None)
++
++
++def test_month_over_month_change_for_each_month(analyst):
++    """F21, E3a R-H07: month-over-month change for each month had no derive step (growth collapses the
++    months), so five right answers were held."""
++    q = ("Show me the month-over-month percentage change in net revenue for each month of 2026 through March, "
++         "as a percent.")
++    df, call = rows(analyst, "net_revenue_fen", [], ["2025-12", "2026-03"])
++    v = df.sort_values("month").set_index("month")["value"].astype(float)
++    pct = (v / v.shift(1) - 1) * 100
++    answer = [{"month": m, "value": float(pct[m])} for m in ("2026-01", "2026-02", "2026-03")]
++    d = {"months": "change", "unit": "percent"}
++    r = T.submit_answer(analyst, q, answer, metric_call=call, derive=d)
++    assert verdict(r) == ("VERIFIED", "ALLOW"), (r["reasons"], r["warnings"])
++    # the base month is not part of the answer, and a wrong month is caught
++    r = T.submit_answer(analyst, q, [{"month": "2025-12", "value": 0.0}, *answer], metric_call=call, derive=d)
++    assert r["tier"] == "FLAGGED"
++    bad = [dict(answer[0]), *answer[1:]]
++    bad[0]["value"] += 1.0
++    r = T.submit_answer(analyst, q, bad, metric_call=call, derive=d)
++    assert verdict(r) == ("FLAGGED", "REJECT")
++
++
++def test_change_needs_a_base_month(analyst):
++    _, call = rows(analyst, "net_revenue_fen", [], ["2026-01", "2026-01"])
++    r = T.submit_answer(analyst, "Month-over-month change in net revenue in January 2026?", [{"value": 1.0}],
++                        metric_call=call, derive={"months": "change"})
++    assert r["kind"] == "invalid_argument" and "base" in r["error"], r
++
++
++def test_share_reports_both_named_members(analyst):
++    """F22, E3a R-L40: 'UK and non-UK shares of the quarter' with across.share a = UK, b = non-UK kept only the
++    UK row, FAILED the right pair, and one agent resubmitted the UK share alone (harness-induced)."""
++    q = "What shares of January 2026 net revenue came from the north and the south regions? Give shares between 0 and 1."
++    df, call = rows(analyst, "net_revenue_fen", ["region"], ["2026-01", "2026-01"])
++    by = df.set_index("region")["value"].astype(float)
++    share = by / by.sum()
++    pair = [{"region": "north", "value": float(share["north"])}, {"region": "south", "value": float(share["south"])}]
++    d = {"across": {"op": "share", "dimension": "region", "a": "north", "b": "south"}}
++    r = T.submit_answer(analyst, q, pair, metric_call=call, derive=d)
++    assert verdict(r) == ("VERIFIED", "ALLOW"), (r["reasons"], r["warnings"])
++    # a alone still means "only this member" (E1b C-H15), and the FAIL now says how to keep the other row
++    r = T.submit_answer(analyst, q, pair, metric_call=call,
++                        derive={"across": {"op": "share", "dimension": "region", "a": "north"}})
++    assert r["tier"] == "FLAGGED"
++    assert "name them all" in r["checks"]["reconcile"]["governed"]["reason"]
++
++
++# ---- F18-F20 need an event metric that is a distinct count: paying customers per revenue month ----------
++def _paying_model(path):
++    import yaml
++    from dsharness.context.semantic import DEFAULT_SEMANTIC_MODEL
++    spec = yaml.safe_load(DEFAULT_SEMANTIC_MODEL.read_text(encoding="utf-8"))
++    spec["datasets"]["invoices"]["measures"]["customers"] = {"agg": "count_distinct", "expr": "b.customer_id"}
++    spec["metrics"]["paying_customers"] = {
++        "type": "simple", "terms": [r"\bpaying customers?\b"], "label": "Paying customers", "unit": "customers",
++        "owner": "test", "description": "Distinct customers with an invoice line in the month.", "dataset": "invoices",
++        "measure": "customers", "dimensions": ["region", "channel", "plan"], "caveats": ["test metric"]}
++    path.write_text(yaml.safe_dump(spec, allow_unicode=True, sort_keys=False), encoding="utf-8")
++
++
++@pytest.fixture(scope="module")
++def own(small_ws, tmp_path_factory):
++    ws = private_ws(small_ws, tmp_path_factory.mktemp("v05own") / "ws")
++    ws.context.mkdir()
++    _paying_model(ws.context / "semantic_model.yaml")
++    ctx = T.make_context(ws, "score", "analyst", "agent:analyst-v05-own")
++    yield ctx
++    ctx.close()
++
++
++def _sql(ctx, sql):
++    return ctx.con.execute(sql).fetchall()
++
++
++def test_period_distinct_count_counts_each_customer_once(own):
++    """F19, E3a R-L31: 'per active customer across October to December' counts each customer once in the quarter
++    (1,153.26), not month by month; distinct counts had no period value, so the question could not be declared."""
++    q = "How many paying customers did we have in Q1 2026, counting each customer once?"
++    df, call = rows(own, "paying_customers", [], ["2026-01", "2026-03"])
++    (truth,), = _sql(own, "SELECT COUNT(DISTINCT customer_id) FROM silver.invoices WHERE NOT is_test_account "
++                          "AND revenue_month BETWEEN '2026-01' AND '2026-03'")
++    assert truth < df["value"].sum()              # customers who paid in two months: the monthly sum double-counts
++    r = T.submit_answer(own, q, [{"value": int(truth)}], metric_call=call, derive={"months": "total"})
++    assert verdict(r) == ("VERIFIED", "ALLOW"), (r["reasons"], r["warnings"])
++    r = T.submit_answer(own, q, [{"value": int(df["value"].sum())}], metric_call=call, derive={"months": "total"})
++    assert verdict(r) == ("FLAGGED", "REJECT")
++
++
++def test_total_is_refused_for_a_point_in_time_metric(own):
++    _, call = rows(own, "active_subscribers_eom", [], ["2026-01", "2026-03"])
++    r = T.submit_answer(own, "How many active subscribers did we have in Q1 2026?", [{"value": 1}],
++                        metric_call=call, derive={"months": "total"})
++    assert r["kind"] == "invalid_argument" and "point in time" in r["error"], r
++
++
++def test_ratio_of_two_metrics_per_month_and_over_the_period(own):
++    """F18, E3a R-L11 / R-L13 / R-L39 / R-L31: per customer, per order and share-of-customers questions had no
++    governed ratio, so agents declared the numerator and reconcile compared a ratio with a count (FAIL)."""
++    q1 = "What was net revenue per paying customer in February 2026, in CNY?"
++    rev, call = rows(own, "net_revenue_fen", [], ["2026-02", "2026-02"])
++    cust, _ = rows(own, "paying_customers", [], ["2026-02", "2026-02"])
++    per = float(rev["value"].iloc[0]) / float(cust["value"].iloc[0]) / 100
++    d = {"divide_by": {"metric": "paying_customers"}, "unit": "cny"}
++    r = T.submit_answer(own, q1, [{"value": per}], metric_call=call, derive=d)
++    assert verdict(r) == ("VERIFIED", "ALLOW"), (r["reasons"], r["warnings"])
++    # the E3a failure: the ratio submitted with the numerator alone declared
++    r = T.submit_answer(own, q1, [{"value": per}], metric_call=call, derive={"unit": "cny"})
++    assert r["tier"] != "VERIFIED"
++    # over a quarter: the quarter's revenue over customers counted once in the quarter
++    q2 = "What was net revenue per paying customer across Q1 2026, in CNY, counting each customer once?"
++    rev, call = rows(own, "net_revenue_fen", ["region"], ["2026-01", "2026-03"])
++    tot = rev.groupby("region")["value"].sum().astype(float)
++    den = dict(_sql(own, "SELECT region, COUNT(DISTINCT customer_id) FROM silver.invoices WHERE NOT is_test_account "
++                         "AND revenue_month BETWEEN '2026-01' AND '2026-03' GROUP BY region"))
++    answer = [{"region": g, "value": float(tot[g]) / den[g] / 100} for g in tot.index]
++    d = {"months": "total", "divide_by": {"metric": "paying_customers"}, "unit": "cny"}
++    r = T.submit_answer(own, q2, answer, metric_call=call, derive=d)
++    assert verdict(r) == ("VERIFIED", "ALLOW"), (r["reasons"], r["warnings"])
++    # the mean of monthly ratios is a different number (E3a REVIEW: 781.00 vs 1,153.26) and is caught
++    mon, _ = rows(own, "paying_customers", ["region"], ["2026-01", "2026-03"])
++    m = rev.merge(mon, on=["month", "region"])
++    mean = (m["value_x"].astype(float) / m["value_y"].astype(float)).groupby(m["region"]).mean() / 100
++    r = T.submit_answer(own, q2, [{"region": g, "value": float(mean[g])} for g in mean.index], metric_call=call,
++                        derive=d)
++    assert r["tier"] == "FLAGGED"
++
++
++def test_divide_by_is_validated(own):
++    _, call = rows(own, "net_revenue_fen", ["invoice_type"], ["2026-01", "2026-03"])
++    r = T.submit_answer(own, "Net revenue per paying customer by invoice type in Q1 2026?", [{"value": 1.0}],
++                        metric_call=call, derive={"months": "total", "divide_by": {"metric": "paying_customers"}})
++    assert r["kind"] == "invalid_argument" and "share the breakdown" in r["error"], r
++    _, call = rows(own, "net_revenue_fen", [], ["2026-01", "2026-03"])
++    r = T.submit_answer(own, "Net revenue per paying customer in Q1 2026?", [{"value": 1.0}], metric_call=call,
++                        derive={"months": "sum", "divide_by": {"metric": "paying_customers"}})
++    assert r["kind"] == "invalid_argument" and "divide_by" in r["error"], r
++
++
++def test_growth_between_two_quarters(own):
++    """F20, E3a R-L18 / R-H14: 'Q2 to Q3' growth was recomputed from the first and last month of the range
++    (99.5% instead of 22.47%), FAILED in all ten attempts, and one agent fell back to monthly rows."""
++    q = "By what percentage did net revenue change from Q4 2025 to Q1 2026? Use Q4 2025 as the base."
++    df, call = rows(own, "net_revenue_fen", [], ["2025-10", "2026-03"])
++    v = df.set_index("month")["value"].astype(float)
++    q4, q1 = v["2025-10":"2025-12"].sum(), v["2026-01":"2026-03"].sum()
++    right = (q1 / q4 - 1) * 100
++    d = {"months": "growth", "windows": [["2025-10", "2025-12"], ["2026-01", "2026-03"]], "unit": "percent"}
++    r = T.submit_answer(own, q, [{"value": right}], metric_call=call, derive=d)
++    assert verdict(r) == ("VERIFIED", "ALLOW"), (r["reasons"], r["warnings"])
++    first_last = (v["2026-03"] / v["2025-10"] - 1) * 100       # what v0.4 recomputed
++    r = T.submit_answer(own, q, [{"value": first_last}], metric_call=call, derive=d)
++    assert verdict(r) == ("FLAGGED", "REJECT")
++    r = T.submit_answer(own, q, [{"value": right}], metric_call=call,
++                        derive={**d, "windows": [["2025-07", "2025-09"], ["2026-01", "2026-03"]]})
++    assert r["kind"] == "invalid_argument" and "inside metric_call.months" in r["error"], r
++
++
++def test_rows_keyed_by_an_ungoverned_column_are_unknown_not_wrong(analyst):
++    """F24, E3a R-H29 Claude r2, r3: a right top-5 by item code declared as the metric with no dimension was
++    FAILED 'rows lack a month column'; no governed metric has item code, so the check cannot know."""
++    q = "Which two products earned the most net revenue in Q1 2026?"
++    _, call = rows(analyst, "net_revenue_fen", [], ["2026-01", "2026-03"])
++    r = T.submit_answer(analyst, q, [{"product": "A-100", "value": 5.0}, {"product": "B-200", "value": 4.0}],
++                        metric_call=call)
++    assert r["tier"] != "VERIFIED" and r["gate"]["verdict"] != "ALLOW"
++    assert any("no governed metric covers this breakdown" in x for x in r["reasons"]), r["reasons"]
++    assert not any("rows lack a 'month' column" in x for x in r["reasons"]), r["reasons"]
++    # a governed dimension left undeclared is still the agent's claim disagreeing with its rows
++    df, call = rows(analyst, "net_revenue_fen", [], ["2026-01", "2026-03"])
++    reg, _ = rows(analyst, "net_revenue_fen", ["region"], ["2026-01", "2026-03"])
++    per = reg.groupby("region")["value"].sum()
++    r = T.submit_answer(analyst, q, [{"region": g, "value": float(per[g])} for g in per.index], metric_call=call)
++    assert verdict(r) == ("FLAGGED", "REJECT")
++    assert any("rows lack a 'month' column" in x for x in r["reasons"]), r["reasons"]
++
++
++def test_reexecution_pairs_a_renamed_value_column():
++    """F27, E3a: 23 arm-H submissions FAILED re-execution only because the SQL said `AS v` (or kept helper
++    counts) while the answer, as asked, called the column 'value'."""
++    from dsharness.tools.analytics import compare_row_multisets as cmp
++    q_rows = [("A", 3.0), ("B", 2.0)]
++    ok = cmp([{"sku": "A", "value": 3.0}, {"sku": "B", "value": 2.0}], ["sku", "v"], q_rows)
++    assert ok["outcome"] == "PASS" and ok["column_notes"] == ["answer column 'value' compared with SQL column 'v'"]
++    assert cmp([{"sku": "A", "value": 3.5}, {"sku": "B", "value": 2.0}], ["sku", "v"], q_rows)["outcome"] == "FAIL"
++    # the SQL's own one-column expression
++    assert cmp([{"value": 7.25}], ["(sum(amount) / count(DISTINCT buyer_id))"], [(7.25,)])["outcome"] == "PASS"
++    # numeric helper columns may be left out; a text column may not (it is a key)
++    helper = [("2026-01", 10, 4, 0.4), ("2026-02", 8, 2, 0.25)]
++    cols = ["month", "active_customers", "repeat_customers", "value"]
++    assert cmp([{"month": "2026-01", "value": 0.4}, {"month": "2026-02", "value": 0.25}], cols, helper)["outcome"] \
++        == "PASS"
++    assert cmp([{"value": 0.4}, {"value": 0.25}], cols, helper)["outcome"] == "FAIL"
++    # two names left on each side stay a mismatch
++    assert cmp([{"x": "A", "value": 3.0}], ["sku", "v"], [("A", 3.0)])["outcome"] == "FAIL"
++
++
++def test_a_qualifier_refines_a_generic_term(tmp_path):
++    """F23, E3a R-H08 / R-L40 / R-H14: 毛产品销售额 reached net sales through 销售额, so declaring gross sales was
++    'contradicted' and Codex R-H14 r1 switched to net. A generic word is only the default reading: a qualifier of
++    a metric that refines it makes that metric the reading, and a bare generic word still means the default."""
++    import copy
++    import yaml
++    from dsharness.context.semantic import DEFAULT_SEMANTIC_MODEL, load_semantic_model
++    from dsharness.tools.analytics import claim_contradictions, match_governed_metrics
++    spec = yaml.safe_load(DEFAULT_SEMANTIC_MODEL.read_text(encoding="utf-8"))
++    net = spec["metrics"]["net_revenue_fen"]
++    gross = copy.deepcopy(net)
++    net["terms"], net["generic_terms"] = [r"\bnet revenues?\b|\brefund(?:s|ed)?\b"], [r"\brevenues?\b|收入"]
++    gross.update(terms=[r"\bgross revenues?\b"], qualifiers=[r"\bgross\b|毛"], suppresses=["net_revenue_fen"],
++                 label="Gross revenue")
++    spec["metrics"]["gross_revenue_fen"] = gross
++    path = tmp_path / "semantic_model.yaml"
++    path.write_text(yaml.safe_dump(spec, allow_unicode=True, sort_keys=False), encoding="utf-8")
++    model = load_semantic_model(path)
++    assert match_governed_metrics(model, "2026年1月的毛产品收入是多少？") == ["gross_revenue_fen"]
++    assert match_governed_metrics(model, "What was gross product revenue in January 2026?") == ["gross_revenue_fen"]
++    assert match_governed_metrics(model, "What was revenue in January 2026?") == ["net_revenue_fen"]
++    assert match_governed_metrics(model, "What was net revenue in January 2026?") == ["net_revenue_fen"]
++
++    def call(metric):
++        return {"metric": metric, "dimensions": [], "months": ["2026-01", "2026-01"], "filters": None}
++    q = "2026年1月的毛产品收入是多少？"
++    assert not [c for c in claim_contradictions(model, q, call("gross_revenue_fen")) if "asks about" in c]
++    assert [c for c in claim_contradictions(model, q, call("net_revenue_fen")) if "asks about" in c]
++    # the default stands without a qualifier: gross for plain 'revenue' is the definitional error
++    assert [c for c in claim_contradictions(model, "What was revenue in January 2026?", call("gross_revenue_fen"))
++            if "asks about" in c]
++    # only just before the generic word: elsewhere the default reading stands
++    assert match_governed_metrics(model, "What was revenue in January 2026, not counting gross adjustments?") \
++        == ["net_revenue_fen"]
++    # a qualifier with no generic word to refine names nothing
++    assert match_governed_metrics(model, "What was the gross churn in January 2026?") == ["churned_customers"]
++    bad = copy.deepcopy(spec)
++    bad["metrics"]["addon_units"]["qualifiers"] = [r"\bextra\b"]
++    path.write_text(yaml.safe_dump(bad, allow_unicode=True, sort_keys=False), encoding="utf-8")
++    with pytest.raises(ValueError, match="qualifiers"):
++        load_semantic_model(path)
++
++
++# ---- from the blind review of the v0.5 patch (GPT-6-Luna, 2026-11-07) ------------------------------------
++def test_a_step_over_months_must_cover_the_asked_months(analyst):
++    """A Q1 total declared over December to March VERIFIED (a gap older than v0.5: the claim check allows a wider
++    call because a per-month answer still holds the asked rows, but a total over a wider call is another number)."""
++    q = "What was total net revenue from January to March 2026, in CNY?"
++    df, call = rows(analyst, "net_revenue_fen", [], ["2025-12", "2026-03"])
++    r = T.submit_answer(analyst, q, [{"value": float(df["value"].sum()) / 100}], metric_call=call,
++                        derive={"months": "sum", "unit": "cny"})
++    assert r["tier"] != "VERIFIED" and r["gate"]["verdict"] != "ALLOW"
++    assert any("declare exactly those months" in w for w in r["warnings"]), r["warnings"]
++    # one month year on year is still one call from the base month to the asked month
++    q = "By what percentage did net revenue grow in March 2026 compared with March 2025?"
++    df, call = rows(analyst, "net_revenue_fen", [], ["2025-03", "2026-03"])
++    v = df.set_index("month")["value"].astype(float)
++    r = T.submit_answer(analyst, q, [{"value": (v["2026-03"] / v["2025-03"] - 1) * 100}], metric_call=call,
++                        derive={"months": "growth", "unit": "percent"})
++    assert verdict(r) == ("VERIFIED", "ALLOW"), (r["reasons"], r["warnings"])
++    # month over month for one month; and "cumulative ... at the end of" a month is a sum from an earlier start
++    df, call = rows(analyst, "net_revenue_fen", [], ["2026-01", "2026-02"])
++    v = df.set_index("month")["value"].astype(float)
++    r = T.submit_answer(analyst, "How much did net revenue grow in February 2026 over the month before, in percent?",
++                        [{"value": (v["2026-02"] / v["2026-01"] - 1) * 100}], metric_call=call,
++                        derive={"months": "growth", "unit": "percent"})
++    assert verdict(r) == ("VERIFIED", "ALLOW"), (r["reasons"], r["warnings"])
++    r = T.submit_answer(analyst, "What was the cumulative net revenue at the end of February 2026, in fen?",
++                        [{"value": float(v.sum())}], metric_call=call, derive={"months": "sum"})
++    assert verdict(r) == ("VERIFIED", "ALLOW"), (r["reasons"], r["warnings"])
++    # a running total starts where the question starts
++    q = "Show the running total of net revenue for each month from January to March 2026."
++    df, call = rows(analyst, "net_revenue_fen", [], ["2025-12", "2026-03"])
++    run = df.sort_values("month")["value"].cumsum()
++    r = T.submit_answer(analyst, q, [{"month": m, "value": float(x)} for m, x in zip(df.sort_values("month")["month"], run)],
++                        metric_call=call, derive={"months": "cumsum"})
++    assert any("running total starts" in w for w in r["warnings"]), r["warnings"]
++
++
++def test_growth_windows_are_the_asked_periods(analyst):
++    q = "By what percentage did net revenue change from Q4 2025 to Q1 2026?"
++    df, call = rows(analyst, "net_revenue_fen", [], ["2025-10", "2026-03"])
++    v = df.set_index("month")["value"].astype(float)
++    # two months of each quarter: not periods of a growth question
++    r = T.submit_answer(analyst, q, [{"value": (v["2026-02":"2026-03"].sum() / v["2025-10":"2025-11"].sum() - 1) * 100}],
++                        metric_call=call, derive={"months": "growth", "unit": "percent",
++                                                  "windows": [["2025-10", "2025-11"], ["2026-02", "2026-03"]]})
++    assert r["kind"] == "invalid_argument" and "back to back" in r["error"], r
++    # back to back but not the asked quarters
++    r = T.submit_answer(analyst, q, [{"value": (v["2026-01":"2026-03"].sum() / v["2025-10":"2025-12"].sum() - 1) * 100}],
++                        metric_call=call, derive={"months": "growth", "unit": "percent",
++                                                  "windows": [["2025-10", "2025-12"], ["2026-01", "2026-03"]]})
++    assert verdict(r) == ("VERIFIED", "ALLOW"), (r["reasons"], r["warnings"])
++    r = T.submit_answer(analyst, q, [{"value": (v["2026-02":"2026-03"].sum() / v["2025-12":"2026-01"].sum() - 1) * 100}],
++                        metric_call=call, derive={"months": "growth", "unit": "percent",
++                                                  "windows": [["2025-12", "2026-01"], ["2026-02", "2026-03"]]})
++    assert any("derive.windows compare" in w for w in r["warnings"]), r["warnings"]
++    # the same months a year apart
++    df, call = rows(analyst, "net_revenue_fen", [], ["2025-01", "2026-03"])
++    v = df.set_index("month")["value"].astype(float)
++    q = "How much did net revenue grow in January to March 2026 compared with the same months of 2025?"
++    r = T.submit_answer(analyst, q, [{"value": (v["2026-01":"2026-03"].sum() / v["2025-01":"2025-03"].sum() - 1) * 100}],
++                        metric_call=call, derive={"months": "growth", "unit": "percent",
++                                                  "windows": [["2025-01", "2025-03"], ["2026-01", "2026-03"]]})
++    assert verdict(r) == ("VERIFIED", "ALLOW"), (r["reasons"], r["warnings"])
++
++
++def test_change_is_against_the_calendar_month_before():
++    """A rate or an average omits a month with no data; the change for the month after it has no base (it was
++    computed against the row before, two months back)."""
++    import pandas as pd
++    from dsharness.tools.derive import apply_derive
++    gov = pd.DataFrame({"month": ["2026-01", "2026-03", "2026-04", "2026-01", "2026-02"],
++                        "region": ["north", "north", "north", "south", "south"],
++                        "value": [0.10, 0.20, 0.25, 0.30, 0.15]})
++    d = {"months": "change", "across": None, "keep": None, "unit": None}
++    out, keys = apply_derive(gov, d, ["region"], months=("2026-01", "2026-04"))
++    got = {(r.month, r.region): round(r.value, 6) for r in out.itertuples()}
++    assert got == {("2026-04", "north"): 0.25, ("2026-02", "south"): -0.5}, got
++    assert keys == ["month", "region"]

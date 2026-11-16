@@ -1,0 +1,280 @@
+# E4 governed semantic model (DRAFT, 2026-11-07): the frozen E3a model plus the H v0.5 onboarding changes
+#   O1  item code (sku) as a dimension of the line metrics (top-N by item code is a governed `across: top`)
+#   O2  customer type (identified / guest) as a dimension of the line and order metrics
+#   O3  net sales named by a generic word only by default (generic_terms); 'gross' / 毛 just before it reads as
+#       gross sales (qualifiers); term lists widened from the term-coverage test's tuning set
+#       (docs/experiments/E4/term_coverage_*.md), measured on a held-out set before this file is frozen.
+# Definitions: experiments/E3a/DEFINITIONS.md (owner text, written before any question).
+# Fragment aliases as in the built-in model: s = month spine row, b = one row of the dataset relation.
+
+version: 1
+name: online_gift_wholesaler
+description: >-
+  Online gift wholesaler selling to shops in the UK and abroad: order lines with products,
+  cancellations, fees, adjustments and vouchers. Money is in GBP. Months are calendar months of the
+  order time. The data ends on 2025-12-09, so December 2025 is incomplete.
+
+time_spine:
+  grain: month
+  coverage: SELECT min(month) AS first_month, max(month) AS last_month FROM silver.order_lines
+
+dimensions:
+  month:
+    type: time
+    description: Calendar month 'YYYY-MM' of the order time. Present in every metric result.
+  market:
+    type: categorical
+    values: [UK, non-UK]
+    aliases: {UK: [United Kingdom, 英国, 英国市场, 国内], non-UK: [non UK, outside the UK, international, abroad, 海外, 非英国, 英国以外, 国际]}
+    names: [市场, 区域]
+    description: UK when the customer country is United Kingdom, otherwise non-UK.
+  country:
+    type: categorical
+    # every country in the data, so a misspelled filter is an error, not an empty answer
+    values: [United Kingdom, EIRE, Germany, France, Netherlands, Spain, Switzerland, Belgium, Portugal, Australia,
+             Channel Islands, Italy, Norway, Sweden, Cyprus, Finland, Austria, Denmark, Unspecified, Greece, Japan,
+             USA, Poland, United Arab Emirates, Israel, Hong Kong, Singapore, Malta, Iceland, Canada, Lithuania, RSA,
+             Bahrain, Brazil, Thailand, Korea, European Community, Lebanon, West Indies, Bermuda, Nigeria,
+             Czech Republic, Saudi Arabia]
+    aliases:
+      United Kingdom: [UK, Britain, Great Britain, 英国]
+      EIRE: [Ireland, 爱尔兰]
+      Germany: [德国]
+      France: [法国]
+      Netherlands: [Holland, 荷兰]
+      Spain: [西班牙]
+      Switzerland: [瑞士]
+      Belgium: [比利时]
+      Portugal: [葡萄牙]
+      Australia: [澳大利亚, 澳洲]
+      Channel Islands: [海峡群岛]
+      Italy: [意大利]
+      Norway: [挪威]
+      Sweden: [瑞典]
+      Cyprus: [塞浦路斯]
+      Finland: [芬兰]
+      Austria: [奥地利]
+      Denmark: [丹麦]
+      Unspecified: [未指明国家, 国家未知]
+      Greece: [希腊]
+      Japan: [日本]
+      USA: [United States, 美国]
+      Poland: [波兰]
+      United Arab Emirates: [UAE, 阿联酋, 阿拉伯联合酋长国]
+      Israel: [以色列]
+      Hong Kong: [香港]
+      Singapore: [新加坡]
+      Malta: [马耳他]
+      Iceland: [冰岛]
+      Canada: [加拿大]
+      Lithuania: [立陶宛]
+      RSA: [South Africa, 南非]
+      Bahrain: [巴林]
+      Brazil: [巴西]
+      Thailand: [泰国]
+      Korea: [South Korea, 韩国]
+      European Community: [欧洲共同体]
+      Lebanon: [黎巴嫩]
+      West Indies: [西印度群岛]
+      Bermuda: [百慕大]
+      Nigeria: [尼日利亚]
+      Czech Republic: [Czechia, 捷克]
+      Saudi Arabia: [沙特阿拉伯, 沙特]
+    description: Customer country as recorded on the order line (Ireland is recorded as EIRE, South Africa as RSA).
+    names: [国家, 国别]
+  sku:
+    type: categorical
+    # open list: thousands of item codes, so no values; a filter value is matched as written
+    description: Item code. Catalogue items start with five digits, some with a letter after (85123A); POST, DOT, M, ADJUST and similar codes are not products.
+    names: [item code, item codes, stock code, product code, 商品编码, 货号, 商品代码]
+  customer_type:
+    type: categorical
+    # not plain 'identified': E3a R-H29 says "products, identified by item code"
+    values: [identified_customer, guest]
+    aliases: {identified_customer: [registered customers, identified customers, known customers, 注册客户, 已识别客户, 会员], guest: [guests, guest orders, guest checkout, anonymous, 游客, 访客, 匿名]}
+    names: [customer type, 客户类型]
+    description: identified_customer when the order line carries a customer number, guest when it has none.
+
+datasets:
+  lines:
+    description: Governed order lines (exact duplicates collapsed, every line typed).
+    relation: |
+      SELECT *, CASE WHEN buyer_id IS NULL THEN 'guest' ELSE 'identified_customer' END AS customer_type
+      FROM silver.order_lines
+    month_join: b.month = s.month
+    required_filter: b.order_no IS NOT NULL      # the validator demands one; this data has no test accounts
+    dimensions: {market: market, country: country, sku: sku, customer_type: customer_type}
+    measures:
+      amount: {agg: sum, expr: b.amount, cast: double}          # GBP with pence
+      negated_amount: {agg: sum, expr: -b.amount, cast: double}
+      units: {agg: sum, expr: b.qty}
+      orders: {agg: count_distinct, expr: b.order_no}
+      customers: {agg: count_distinct, expr: b.buyer_id}
+  customer_lines:
+    description: Product lines of identified customers with the month of each customer's first product line.
+    relation: |
+      SELECT l.*, f.first_month
+      FROM silver.order_lines l
+      JOIN (SELECT buyer_id, min(month) AS first_month FROM silver.order_lines
+            WHERE line_type = 'product' AND buyer_id IS NOT NULL GROUP BY buyer_id) f USING (buyer_id)
+      WHERE l.line_type = 'product'
+    month_join: b.month = s.month
+    required_filter: b.buyer_id IS NOT NULL
+    dimensions: {market: market, country: country}
+    measures:
+      customers: {agg: count_distinct, expr: b.buyer_id}
+
+metrics:
+  gross_product_sales:
+    type: simple
+    terms: ['\bgross (?:product )?sales\b|\bgross revenues?\b|毛销售额|总(?:产品)?销售额|产品销售总额|\b(?:before|ignoring|excluding|not counting) cancel(?:l?ations|s)\b|\btotal value of (?:all )?product lines\b|取消前|不扣取消|产品行的?总金额']
+    qualifiers: ['\bgross\b|毛']
+    suppresses: [net_product_sales]
+    label: Gross product sales (GBP)
+    unit: GBP
+    owner: "retail-finance (E3a owner)"
+    description: Total value (qty x unit price) of product lines.
+    definition: SUM(amount) over line_type = 'product'.
+    dataset: lines
+    measure: amount
+    filter: b.line_type = 'product'
+    dimensions: [market, country, sku, customer_type]
+    caveats: [No independent ledger exists for this data; answers cap at T1., December 2025 is a partial month.]
+
+  cancelled_value:
+    type: simple
+    terms: ['\bcancel(?:l)?ed (?:value|sales|amount)\b|\bcancell?ations? (?:value|amount)\b|\bvalue of cancell?ations?\b|\bcancel value\b|\b(?:money|value|amount|gbp)\b[^.?!]{0,20}\bcancell?ed\b|\bcancell?ed\b[^.?!]{0,12}\b(?:value|amount|money)\b|\blos[et] to cancell?ations?\b|\bdid (?:customers|we|they) cancel\b', '取消金额|退单金额|取消(?!前)(?:的|单|了)?[^，。？?]{0,8}(?:金额|总额|总价值|货值|价值|英镑|钱)|被取消的?[^，。？?]{0,8}(?:金额|总额|总价值|货值|价值)|因为?取消[^，。？?]{0,8}损失']
+    suppresses: [net_product_sales, orders]
+    label: Cancelled value (GBP)
+    unit: GBP
+    owner: "retail-finance (E3a owner)"
+    description: Value of cancellation lines as a positive amount, booked in the month of the cancellation line.
+    definition: -SUM(amount) over line_type = 'cancellation'.
+    dataset: lines
+    measure: negated_amount
+    filter: b.line_type = 'cancellation'
+    dimensions: [market, country, sku, customer_type]
+    caveats: [A cancellation is booked in the month it is issued, not the month of the original order.]
+
+  net_product_sales:
+    type: simple
+    terms: ['\bnet (?:product )?sales\b|\bnet revenues?\b|\b(?:after|minus|less|net of) cancell?ations\b|净销售额?|净收入|(?:减去|扣掉|扣除)取消|取消后']
+    generic_terms: ['\bsales\b|\brevenues?\b|\bturnover\b|销售额|营收|收入']
+    suppresses: [cancelled_value]
+    label: Net product sales (GBP)
+    unit: GBP
+    owner: "retail-finance (E3a owner)"
+    description: Product lines minus cancellations (gross product sales - cancelled value).
+    definition: SUM(amount) over line_type IN ('product', 'cancellation').
+    dataset: lines
+    measure: amount
+    filter: b.line_type IN ('product', 'cancellation')
+    dimensions: [market, country, sku, customer_type]
+    caveats: [Fees, vouchers, adjustments and zero-value lines are not sales., December 2025 is a partial month.]
+
+  cancellation_rate:
+    type: ratio
+    terms: ['\bcancell?ation rates?\b|\brate of cancell?ations?\b|\bcancell?ation share\b|(?:\b(?:percent(?:age)?|share|fraction|ratio|proportion)\b|%)[^.?!]{0,40}\bcancell?ed\b|\bhow often\b[^.?!]{0,30}\bcancel|\bcancell?ed\b[^.?!]{0,30}\b(?:percent(?:age)?|share|fraction|ratio|proportion)\b|\bcancel ?%', '取消率|退单率|取消(?:的)?(?:比例|占比|比率)|被取消的?比例|多少比例[^，。？?]{0,4}取消|取消[^，。？?]{0,10}占[^，。？?]{0,10}(?:百分|比例|比重)|cancel率']
+    suppresses: [cancelled_value, gross_product_sales, net_product_sales, orders]
+    label: Cancellation rate
+    unit: ratio
+    owner: "retail-finance (E3a owner)"
+    description: Cancelled value / gross product sales of the same month and slice (0-1).
+    definition: cancelled_value / gross_product_sales. Rows without product sales are omitted.
+    numerator: cancelled_value
+    denominator: gross_product_sales
+    dimensions: [market, country, sku, customer_type]
+    caveats: [Do not average monthly rates; recompute from the amounts.]
+
+  orders:
+    type: simple
+    terms: ['\borders?\b|\bordrs?\b|\binvoices?\b|订单|下了多少单|单数|多少单|下单(?:数|量)']
+    month_rollup: sum
+    label: Orders
+    unit: orders
+    owner: "retail-ops (E3a owner)"
+    description: Distinct order numbers with at least one product line.
+    definition: COUNT(DISTINCT order_no) over line_type = 'product'.
+    dataset: lines
+    measure: orders
+    filter: b.line_type = 'product'
+    dimensions: [market, country, customer_type]
+    caveats: [Every order lies in one month (pipeline test orders_stay_in_one_month), so monthly counts add up.]
+
+  average_order_value:
+    type: ratio
+    terms: ['\b(?:av[a-z]*|mean|typical) order (?:value|size)\b|(?<![a-z])aov(?![a-z])|\bvalue per order\b|\bav(?:era)?g(?:e)? basket(?: size)?\b|\btypical order\b|\baverage (?:ticket|spend|amount|value)(?: per order)?\b|\b(?:spend|amount|ticket) per order\b', '平均订单金额|订单的?平均金额|客单价|平均订单价值|平均每单|每单平均|平均一单|一个订单平均']
+    suppresses: [orders, gross_product_sales, net_product_sales]
+    label: Average order value (GBP)
+    unit: GBP
+    owner: "retail-finance (E3a owner)"
+    description: Gross product sales / orders.
+    definition: gross_product_sales / orders. Rows without orders are omitted.
+    numerator: gross_product_sales
+    denominator: orders
+    dimensions: [market, country, customer_type]
+    caveats: [Uses gross product sales, before cancellations.]
+
+  units_sold:
+    type: simple
+    terms: ['\bunits?(?! price)(?: sold)?\b|\bunites\b|\bsales volume\b|\bin pieces\b|\b(?:in|total) qty\b|\bqty sold\b|\bquantity sold\b|\bitems sold\b|\bpieces? sold\b|销量|件数|销售数量|卖出了?多少件|售出的?数量|卖了多少[件个]|卖出多少件']
+    label: Units sold
+    unit: units
+    owner: "retail-ops (E3a owner)"
+    description: Total quantity of product lines.
+    definition: SUM(qty) over line_type = 'product'.
+    dataset: lines
+    measure: units
+    filter: b.line_type = 'product'
+    dimensions: [market, country, sku, customer_type]
+    caveats: [Cancelled units are not subtracted.]
+
+  active_customers:
+    type: simple
+    terms: ['\b(?:active|identified|distinct|unique) (?:customers?|buyers?|custmers?|accounts?|shops?|stores?)\b|\bcustomers? (?:bought|purchased|ordered)\b|\bactive accounts?\b|\bcustomers? (?:who )?placed (?:at least one|an?) orders?\b', '活跃客户|购买客户|客户数|客户下过单|下过单的?客户|几家店铺在买|去重后?的?买家|有过采购的客户|不同的客户']
+    suppresses: [orders]
+    label: Active customers
+    unit: customers
+    owner: "retail-crm (E3a owner)"
+    description: Distinct customer numbers with at least one product line in the month.
+    definition: COUNT(DISTINCT buyer_id) over product lines with buyer_id not null.
+    dataset: lines
+    measure: customers
+    filter: b.line_type = 'product' AND b.buyer_id IS NOT NULL
+    dimensions: [market, country]
+    caveats: [Guest orders (about 23% of lines) have no customer number and are never customers., A distinct count cannot be summed over months.]
+
+  new_customers:
+    type: simple
+    terms: ['\bnew (?:customers?|buyers?|accounts?|shops?|clients?|custmers?)\b|\bfirst[- ]time (?:customers?|buyers?)\b|\bbrand new accounts?\b|\bfirst(?: ever)? orders?\b|\b(?:very )?first time\b', '新客户|新客|首次购买|首购|新增(?:了)?(?:多少)?客户|第一次来?买|首单客户|新店铺|新获取的客户|拓展的新']
+    suppresses: [active_customers, orders]
+    label: New customers
+    unit: customers
+    owner: "retail-crm (E3a owner)"
+    description: Active customers whose first product line in the whole data is in this month.
+    definition: COUNT(DISTINCT buyer_id) over product lines with month = the customer's first product month.
+    dataset: customer_lines
+    measure: customers
+    filter: b.month = b.first_month
+    dimensions: [market, country]
+    caveats: [The data starts in 2023-12, so every customer of 2023-12 counts as new; use from 2024-01.]
+
+  repeat_customers:
+    type: simple
+    terms: ['\b(?:repeat|returning|existing) (?:customers?|buyers?|accounts?|shops?|custmers?)\b|\bcame back to order\b|\bbought again\b', '老客户|回头客|复购|之前买过|又买|再次购买']
+    suppresses: [active_customers, orders]
+    label: Repeat customers
+    unit: customers
+    owner: "retail-crm (E3a owner)"
+    description: Active customers with a product line in an earlier month.
+    definition: COUNT(DISTINCT buyer_id) over product lines with month later than the customer's first product month.
+    dataset: customer_lines
+    measure: customers
+    filter: b.month > b.first_month
+    dimensions: [market, country]
+    caveats: [Meaningful from 2024-01.]
+
+# worked example shown in the derive guidance (list_metrics)
+derive_example: >-
+  Example: 'Q1 2025 net product sales in GBP' -> metric_call {metric: net_product_sales, dimensions: [],
+  months: [2025-01, 2025-03]} with derive {months: sum} and one row {value: ...}.

@@ -1,0 +1,82 @@
+# E3a data catalog: what each queryable table is and how far to trust it.
+# tier:     certified   = silver.order_lines, reviewed SQL, contract-checked, duplicates collapsed, every line typed
+#           staging     = staging.stg_order_lines, typed raw export; duplicates and non-product lines still present
+#           uncertified = bronze_safe.order_lines, the raw order-system export
+# temporal tags as in the built-in catalog. The data has no personal data (customer numbers only).
+
+version: 1
+
+restricted:
+  bronze:
+    reason: Raw typed source tables. Only the pipeline reads bronze; agents use silver.* or bronze_safe.*.
+    pii_columns: {}
+
+rules:
+  uncertified_source:
+    description: >-
+      bronze_safe.* and staging.* are not certified. Results computed from them are flagged and must
+      not be published as official numbers. Use silver.order_lines and the official metric
+      definitions instead.
+
+tables:
+  silver.order_lines:
+    schema: silver
+    tier: certified
+    description: >-
+      Governed order lines. Exact duplicate export rows are collapsed (owner decision); every line
+      has a line_type; nothing else is dropped. Money is exact DECIMAL.
+    grain: one row per distinct order line
+    caveats:
+      - Only line_type = 'product' lines are product sales; cancellations are separate negative lines.
+      - About 23% of lines have no buyer_id (guest orders); they are never customers.
+      - The data ends on 2025-12-09; December 2025 is incomplete.
+    columns:
+      order_no: {description: "Order number. Prefix C = cancellation, A = adjustment / bad debt.", pii: false, temporal: static}
+      sku: {description: "Item code. Catalogue items start with five digits; POST, DOT, C2, M, D, S, B, ADJUST*, BANK CHARGES, AMAZONFEE, CRUK, PADS, gift* and others are not products.", pii: false, temporal: static}
+      item_name: {description: "Item description.", pii: false, temporal: static}
+      qty: {description: "Quantity; negative on cancellations and some zero-value corrections.", pii: false, temporal: static}
+      ordered_at: {description: "Order time as recorded (no time zone).", pii: false, temporal: event_time}
+      unit_price: {description: "Unit price, GBP.", pii: false, temporal: static}
+      buyer_id: {description: "Customer number; NULL for guest orders.", pii: false, temporal: static}
+      country: {description: "Customer country.", pii: false, temporal: static}
+      available_at: {description: "When the line reached the warehouse (= ordered_at: online orders are recorded when placed).", pii: false, temporal: availability_time}
+      amount: {description: "qty x unit_price, GBP (DECIMAL).", pii: false, temporal: static}
+      month: {description: "'YYYY-MM' of ordered_at.", pii: false, temporal: event_time}
+      market: {description: "UK (country = United Kingdom) or non-UK.", pii: false, temporal: static}
+      line_type: {description: "product, cancellation, fee, adjustment, voucher, other_nonproduct or zero_or_negative (first matching rule of the official definitions).", pii: false, temporal: static}
+
+  staging.stg_order_lines:
+    schema: staging
+    tier: staging
+    description: Typed raw order lines (input to silver.order_lines). Duplicates and non-product lines are still present.
+    grain: one row per exported line (exact duplicates possible)
+    required_filters: [uncertified_source]
+    caveats: [Staging layer; use silver.order_lines.]
+    columns:
+      order_no: {description: "Order number.", pii: false, temporal: static}
+      sku: {description: "Item code.", pii: false, temporal: static}
+      item_name: {description: "Item description.", pii: false, temporal: static}
+      qty: {description: "Quantity.", pii: false, temporal: static}
+      ordered_at: {description: "Order time.", pii: false, temporal: event_time}
+      unit_price: {description: "Unit price, GBP.", pii: false, temporal: static}
+      buyer_id: {description: "Customer number; NULL for guest orders.", pii: false, temporal: static}
+      country: {description: "Customer country.", pii: false, temporal: static}
+      available_at: {description: "When the line reached the warehouse.", pii: false, temporal: availability_time}
+
+  bronze_safe.order_lines:
+    schema: bronze_safe
+    tier: uncertified
+    description: Raw order-system export, as received.
+    grain: one row per exported line (exact duplicates possible)
+    required_filters: [uncertified_source]
+    caveats: [Raw export; use silver.order_lines.]
+    columns:
+      order_no: {description: "Order number.", pii: false, temporal: static}
+      sku: {description: "Item code.", pii: false, temporal: static}
+      item_name: {description: "Item description.", pii: false, temporal: static}
+      qty: {description: "Quantity.", pii: false, temporal: static}
+      ordered_at: {description: "Order time.", pii: false, temporal: event_time}
+      unit_price: {description: "Unit price, GBP.", pii: false, temporal: static}
+      buyer_id: {description: "Customer number; NULL for guest orders.", pii: false, temporal: static}
+      country: {description: "Customer country.", pii: false, temporal: static}
+      available_at: {description: "When the line reached the warehouse.", pii: false, temporal: availability_time}

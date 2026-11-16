@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "dsh-analyst": {
+      "command": ".venv/bin/python",
+      "args": ["-m", "dsharness.mcp_server", "--role", "analyst", "--cutoff", "score",
+               "--workspace", "workspace", "--principal", "agent:analyst"]
+    },
+    "dsh-ds": {
+      "command": ".venv/bin/python",
+      "args": ["-m", "dsharness.mcp_server", "--role", "data_scientist", "--cutoff", "train",
+               "--workspace", "workspace", "--principal", "agent:data-scientist"]
+    },
+    "dsh-de": {
+      "command": ".venv/bin/python",
+      "args": ["-m", "dsharness.mcp_server", "--role", "data_engineer", "--cutoff", "score",
+               "--workspace", "workspace", "--principal", "agent:data-engineer"]
+    }
+  }
+}

@@ -1,0 +1,1384 @@
+- qid: C-L01
+  set: C
+  author: luna
+  lang: en
+  question: What was net revenue in April 2026, including refunds, in fen?
+  keys: []
+  unit: fen
+  months:
+  - 2026-04
+  - 2026-04
+  truth_sql: 'SELECT SUM(net_revenue_fen) AS value
+
+    FROM truth_revenue
+
+    WHERE month = ''2026-04''
+
+    '
+  notes: Uses net revenue across all regions; test accounts are already excluded from
+    this table.
+- qid: C-L02
+  set: C
+  author: luna
+  lang: en
+  question: How many non-test subscribers were active at the end of March 2026, by
+    sales region?
+  keys:
+  - region
+  unit: count
+  months:
+  - 2026-03
+  - 2026-03
+  truth_sql: "SELECT d.region, COUNT(*) AS value\nFROM truth_customer_month t\nJOIN\
+    \ dim_customer d USING (customer_id)\nWHERE t.month = '2026-04'\n  AND t.active_at_start\n\
+    \  AND NOT t.is_test\nGROUP BY d.region\nORDER BY d.region\n"
+  notes: End of March is measured as active at the start of April, per the definition.
+  dropped: same truth as B-H20
+- qid: C-L03
+  set: C
+  author: luna
+  lang: en
+  question: What was the February 2026 churn rate, as a share from 0 to 1, for each
+    plan?
+  keys:
+  - plan
+  unit: share
+  months:
+  - 2026-02
+  - 2026-02
+  truth_sql: "SELECT d.plan, SUM(CASE WHEN t.churned THEN 1 ELSE 0 END) * 1.0\n  \
+    \     / COUNT(*) AS value\nFROM truth_customer_month t\nJOIN dim_customer d USING\
+    \ (customer_id)\nWHERE t.month = '2026-02'\n  AND t.at_risk\nGROUP BY d.plan\n\
+    ORDER BY d.plan\n"
+  notes: The denominator is non-test subscribers active at the start of February;
+    the numerator is those who churned during February.
+  dropped: same truth as B-L03
+- qid: C-L04
+  set: C
+  author: luna
+  lang: en
+  question: What was January 2026 ARPU in fen per subscriber?
+  keys: []
+  unit: fen
+  months:
+  - 2026-01
+  - 2026-01
+  truth_sql: "SELECT\n  (SELECT SUM(net_revenue_fen)\n   FROM truth_revenue\n   WHERE\
+    \ month = '2026-01') * 1.0\n  /\n  (SELECT COUNT(*)\n   FROM truth_customer_month\n\
+    \   WHERE month = '2026-01'\n     AND active_at_start\n     AND NOT is_test) AS\
+    \ value\n"
+  notes: Uses monthly net revenue, including refunds, divided by non-test subscribers
+    active at the start of January.
+- qid: C-L05
+  set: C
+  author: luna
+  lang: en
+  question: How many non-test customers churned in February 2026, by sales region?
+  keys:
+  - region
+  unit: count
+  months:
+  - 2026-02
+  - 2026-02
+  truth_sql: "SELECT d.region, COUNT(*) AS value\nFROM truth_customer_month t\nJOIN\
+    \ dim_customer d USING (customer_id)\nWHERE t.month = '2026-02'\n  AND t.churned\n\
+    \  AND NOT t.is_test\nGROUP BY d.region\nORDER BY d.region\n"
+  notes: Counts customers who churned during February; the churn definition already
+    requires they were active at the start of the month.
+  dropped: same truth as B-L06
+- qid: C-L06
+  set: C
+  author: luna
+  lang: en
+  question: How many non-test subscribers were active at the start of May 2026, by
+    acquisition channel?
+  keys:
+  - channel
+  unit: count
+  months:
+  - 2026-05
+  - 2026-05
+  truth_sql: "SELECT d.channel, COUNT(*) AS value\nFROM truth_customer_month t\nJOIN\
+    \ dim_customer d USING (customer_id)\nWHERE t.month = '2026-05'\n  AND t.active_at_start\n\
+    \  AND NOT t.is_test\nGROUP BY d.channel\nORDER BY d.channel\n"
+  notes: Counts distinct customers; there is one customer-month row per customer.
+- qid: C-L07
+  set: C
+  author: luna
+  lang: en
+  question: By what percentage did net revenue grow from January to February 2026,
+    including refunds?
+  keys: []
+  unit: percent
+  months:
+  - 2026-01
+  - 2026-02
+  truth_sql: "WITH monthly AS (\n  SELECT month, SUM(net_revenue_fen) AS revenue_fen\n\
+    \  FROM truth_revenue\n  WHERE month IN ('2026-01', '2026-02')\n  GROUP BY month\n\
+    )\nSELECT\n  (MAX(CASE WHEN month = '2026-02' THEN revenue_fen END)\n   - MAX(CASE\
+    \ WHEN month = '2026-01' THEN revenue_fen END)) * 100.0\n  / MAX(CASE WHEN month\
+    \ = '2026-01' THEN revenue_fen END) AS value\nFROM monthly\n"
+  notes: Growth is (February revenue minus January revenue) divided by January revenue,
+    multiplied by 100.
+  dropped: same truth as B-L08
+- qid: C-L08
+  set: C
+  author: luna
+  lang: en
+  question: What share of April 2026 net revenue, including refunds, came from each
+    sales region? Give each share from 0 to 1.
+  keys:
+  - region
+  unit: share
+  months:
+  - 2026-04
+  - 2026-04
+  truth_sql: "SELECT region,\n       net_revenue_fen * 1.0\n       / SUM(net_revenue_fen)\
+    \ OVER () AS value\nFROM truth_revenue\nWHERE month = '2026-04'\nORDER BY region\n"
+  notes: Each region's net revenue is divided by total net revenue across all regions.
+- qid: C-L09
+  set: C
+  author: luna
+  lang: en
+  question: In April 2026, how many minutes did each non-test subscriber active at
+    the start of the month watch on average, by plan?
+  keys:
+  - plan
+  unit: minutes
+  months:
+  - 2026-04
+  - 2026-04
+  truth_sql: "SELECT d.plan, SUM(t.minutes) * 1.0 / COUNT(*) AS value\nFROM truth_customer_month\
+    \ t\nJOIN dim_customer d USING (customer_id)\nWHERE t.month = '2026-04'\n  AND\
+    \ t.active_at_start\n  AND NOT t.is_test\nGROUP BY d.plan\nORDER BY d.plan\n"
+  notes: The denominator is non-test subscribers active at the start of April; minutes
+    are summed for those same customers.
+  dropped: same truth as B-L10
+- qid: C-L10
+  set: C
+  author: luna
+  lang: zh
+  question: 2026年3月，按获客渠道计算，每位月初活跃的非测试订阅用户平均开了多少张客服工单？
+  keys:
+  - channel
+  unit: other
+  months:
+  - 2026-03
+  - 2026-03
+  truth_sql: "SELECT d.channel, SUM(t.tickets) * 1.0 / COUNT(*) AS value\nFROM truth_customer_month\
+    \ t\nJOIN dim_customer d USING (customer_id)\nWHERE t.month = '2026-03'\n  AND\
+    \ t.active_at_start\n  AND NOT t.is_test\nGROUP BY d.channel\nORDER BY d.channel\n"
+  notes: 计算月初活跃的非测试用户所开工单总数除以这些用户数。
+  dropped: same truth as B-L11
+- qid: C-L11
+  set: C
+  author: luna
+  lang: en
+  question: What was the average monthly plan price in CNY for non-test subscribers
+    active at the start of May 2026, by plan?
+  keys:
+  - plan
+  unit: cny
+  months:
+  - 2026-05
+  - 2026-05
+  truth_sql: "SELECT d.plan, SUM(t.price_fen) / COUNT(*) / 100.0 AS value\nFROM truth_customer_month\
+    \ t\nJOIN dim_customer d USING (customer_id)\nWHERE t.month = '2026-05'\n  AND\
+    \ t.active_at_start\n  AND NOT t.is_test\nGROUP BY d.plan\nORDER BY d.plan\n"
+  notes: Averages the monthly list price for subscribers active at the start of May
+    and converts fen to CNY.
+- qid: C-L12
+  set: C
+  author: luna
+  lang: en
+  question: How much net revenue was recorded in the first quarter of 2026, including
+    refunds, in CNY?
+  keys: []
+  unit: cny
+  months:
+  - 2026-01
+  - 2026-03
+  truth_sql: 'SELECT SUM(net_revenue_fen) / 100.0 AS value
+
+    FROM truth_revenue
+
+    WHERE month BETWEEN ''2026-01'' AND ''2026-03''
+
+    '
+  notes: Sums net revenue for January through March, then converts fen to CNY.
+  dropped: same truth as B-L12
+- qid: C-L13
+  set: C
+  author: luna
+  lang: en
+  question: Which sales region had the highest net revenue in May 2026, including
+    refunds, and what was the amount in CNY? Break any tie by choosing the region
+    whose name comes first alphabetically.
+  keys:
+  - region
+  unit: cny
+  months:
+  - 2026-05
+  - 2026-05
+  truth_sql: 'SELECT region, net_revenue_fen / 100.0 AS value
+
+    FROM truth_revenue
+
+    WHERE month = ''2026-05''
+
+    ORDER BY net_revenue_fen DESC, region ASC
+
+    LIMIT 1
+
+    '
+  notes: Returns the region with the greatest May net revenue; alphabetical order
+    resolves ties.
+- qid: C-L14
+  set: C
+  author: luna
+  lang: zh
+  question: 2026年2月，paid_search渠道的流失率减去organic渠道的流失率，差值是多少个百分点？
+  keys: []
+  unit: percent
+  months:
+  - 2026-02
+  - 2026-02
+  truth_sql: "WITH rates AS (\n  SELECT d.channel,\n         SUM(CASE WHEN t.churned\
+    \ THEN 1 ELSE 0 END) * 1.0 / COUNT(*) AS rate\n  FROM truth_customer_month t\n\
+    \  JOIN dim_customer d USING (customer_id)\n  WHERE t.month = '2026-02'\n    AND\
+    \ t.at_risk\n    AND d.channel IN ('paid_search', 'organic')\n  GROUP BY d.channel\n\
+    )\nSELECT\n  (MAX(CASE WHEN channel = 'paid_search' THEN rate END)\n   - MAX(CASE\
+    \ WHEN channel = 'organic' THEN rate END)) * 100.0 AS value\nFROM rates\n"
+  notes: 各渠道流失率均以该渠道月初活跃的非测试用户为分母；按 paid_search 减 organic 计算并换算为百分点。
+- qid: C-L15
+  set: C
+  author: luna
+  lang: en
+  question: What was the retention program churn rate in March 2026 for each randomized
+    arm, as a percentage of enrollees?
+  keys:
+  - arm
+  unit: percent
+  months:
+  - 2026-03
+  - 2026-03
+  truth_sql: "SELECT arm,\n       SUM(CASE WHEN churned THEN 1 ELSE 0 END) * 100.0\
+    \ / COUNT(*) AS value\nFROM truth_program\nWHERE campaign_month = '2026-03'\n\
+    GROUP BY arm\nORDER BY arm\n"
+  notes: 'Uses intent-to-treat: all enrollees are counted in their randomized arm,
+    regardless of exposure.'
+- qid: C-L16
+  set: C
+  author: luna
+  lang: zh
+  question: 2026年4月留存项目的效果是多少？请按意向治疗口径计算对照组流失率减去处理组流失率，结果用0到1之间的份额表示。
+  keys: []
+  unit: share
+  months:
+  - 2026-04
+  - 2026-04
+  truth_sql: "WITH rates AS (\n  SELECT arm,\n         SUM(CASE WHEN churned THEN\
+    \ 1 ELSE 0 END) * 1.0 / COUNT(*) AS rate\n  FROM truth_program\n  WHERE campaign_month\
+    \ = '2026-04'\n  GROUP BY arm\n)\nSELECT\n  MAX(CASE WHEN arm = 'control' THEN\
+    \ rate END)\n  - MAX(CASE WHEN arm = 'treatment' THEN rate END) AS value\nFROM\
+    \ rates\n"
+  notes: 按随机分组计算，纳入所有报名用户，不论处理组用户是否实际看到消息。
+- qid: C-L17
+  set: C
+  author: luna
+  lang: en
+  question: What percentage of customers enrolled in the treatment arm in May 2026
+    were exposed to the retention message?
+  keys: []
+  unit: percent
+  months:
+  - 2026-05
+  - 2026-05
+  truth_sql: "SELECT SUM(CASE WHEN exposed THEN 1 ELSE 0 END) * 100.0 / COUNT(*) AS\
+    \ value\nFROM truth_program\nWHERE campaign_month = '2026-05'\n  AND arm = 'treatment'\n"
+  notes: The denominator is all May treatment-arm enrollees; the numerator is those
+    who saw the message.
+- qid: C-H01
+  set: C
+  author: haiku
+  lang: en
+  question: What was the monthly churn rate in February 2026 across all subscribers?
+    Give it as a share between 0 and 1, not a percentage.
+  keys: []
+  unit: share
+  months:
+  - 2026-02
+  - 2026-02
+  truth_sql: 'SELECT CAST(SUM(CASE WHEN churned THEN 1 ELSE 0 END) AS DOUBLE) / COUNT(DISTINCT
+    customer_id) AS value
+
+    FROM truth_customer_month
+
+    WHERE month = ''2026-02'' AND at_risk
+
+    '
+  notes: 'Official churn rate: churned customers divided by non-test subscribers active
+    at the start of the month. Share, not percent.'
+- qid: C-H02
+  set: C
+  author: haiku
+  lang: en
+  question: How much net revenue did we book in Q1 2026 across all regions, in CNY?
+  keys: []
+  unit: cny
+  months:
+  - 2026-01
+  - 2026-03
+  truth_sql: 'SELECT SUM(net_revenue_fen) / 100.0 AS value
+
+    FROM truth_revenue
+
+    WHERE month BETWEEN ''2026-01'' AND ''2026-03''
+
+    '
+  notes: Official net revenue (charges + add-ons - refunds, test accounts excluded),
+    summed over Jan to Mar 2026 and converted from fen to CNY.
+  dropped: same truth as B-L12
+- qid: C-H03
+  set: C
+  author: haiku
+  lang: en
+  question: What was ARPU in November 2025? Give it in fen per subscriber, unrounded.
+  keys: []
+  unit: fen
+  months:
+  - 2025-11
+  - 2025-11
+  truth_sql: "WITH rev AS (\n  SELECT SUM(net_revenue_fen) AS r\n  FROM truth_revenue\n\
+    \  WHERE month = '2025-11'\n),\nact AS (\n  SELECT COUNT(DISTINCT customer_id)\
+    \ AS n\n  FROM truth_customer_month\n  WHERE month = '2025-11' AND at_risk\n)\n\
+    SELECT rev.r * 1.0 / act.n AS value\nFROM rev, act\n"
+  notes: 'Official ARPU: net revenue of the month divided by non-test subscribers
+    active at the start of the month. Result in fen, unrounded.'
+- qid: C-H04
+  set: C
+  author: haiku
+  lang: en
+  question: What was the churn rate in September 2025 for each sales region? Give
+    shares between 0 and 1, not percentages.
+  keys:
+  - region
+  unit: share
+  months:
+  - 2025-09
+  - 2025-09
+  truth_sql: "SELECT d.region,\n       CAST(SUM(CASE WHEN t.churned THEN 1 ELSE 0\
+    \ END) AS DOUBLE) / COUNT(DISTINCT t.customer_id) AS value\nFROM truth_customer_month\
+    \ t\nJOIN dim_customer d ON d.customer_id = t.customer_id\nWHERE t.month = '2025-09'\
+    \ AND t.at_risk\nGROUP BY d.region\nORDER BY d.region\n"
+  notes: Official churn rate sliced by the customer's sales region from dim_customer.
+    Shares, not percentages.
+- qid: C-H05
+  set: C
+  author: haiku
+  lang: zh
+  question: 2026年3月底，各个套餐分别有多少活跃订阅用户？请按基础版、Plus版和专业版分别给出数量。
+  keys:
+  - plan
+  unit: count
+  months:
+  - 2026-03
+  - 2026-03
+  truth_sql: 'SELECT d.plan, COUNT(DISTINCT t.customer_id) AS value
+
+    FROM truth_customer_month t
+
+    JOIN dim_customer d ON d.customer_id = t.customer_id
+
+    WHERE t.month = ''2026-04'' AND t.at_risk
+
+    GROUP BY d.plan
+
+    ORDER BY d.plan
+
+    '
+  notes: 'Official end-of-month active count: active at the start of April equals
+    active at the end of March. Uses the 2026-04 rows, non-test only, split by plan
+    from dim_customer.'
+- qid: C-H06
+  set: C
+  author: haiku
+  lang: en
+  question: How many subscribers were active at the start of June 2025, split by acquisition
+    channel?
+  keys:
+  - channel
+  unit: count
+  months:
+  - 2025-06
+  - 2025-06
+  truth_sql: 'SELECT d.channel, COUNT(DISTINCT t.customer_id) AS value
+
+    FROM truth_customer_month t
+
+    JOIN dim_customer d ON d.customer_id = t.customer_id
+
+    WHERE t.month = ''2025-06'' AND t.at_risk
+
+    GROUP BY d.channel
+
+    ORDER BY d.channel
+
+    '
+  notes: Official active-at-start count (non-test, active at start of month), split
+    by channel from dim_customer.
+- qid: C-H07
+  set: C
+  author: haiku
+  lang: en
+  question: By what percentage did net revenue change from December 2025 to January
+    2026? Give the signed percent change, so a rise is positive and a fall is negative.
+  keys: []
+  unit: percent
+  months:
+  - 2025-12
+  - 2026-01
+  truth_sql: "WITH m AS (\n  SELECT month, SUM(net_revenue_fen) AS r\n  FROM truth_revenue\n\
+    \  WHERE month IN ('2025-12', '2026-01')\n  GROUP BY month\n)\nSELECT (MAX(CASE\
+    \ WHEN month = '2026-01' THEN r END) - MAX(CASE WHEN month = '2025-12' THEN r\
+    \ END))\n       * 100.0 / MAX(CASE WHEN month = '2025-12' THEN r END) AS value\n\
+    FROM m\n"
+  notes: Month-over-month change of total net revenue across all regions, as (Jan
+    - Dec) / Dec x 100. Signed, unrounded.
+  dropped: same truth as B-H07
+- qid: C-H08
+  set: C
+  author: haiku
+  lang: en
+  question: What was the total net revenue for the east region across all of 2025,
+    in CNY?
+  keys: []
+  unit: cny
+  months:
+  - 2025-01
+  - 2025-12
+  truth_sql: 'SELECT SUM(net_revenue_fen) / 100.0 AS value
+
+    FROM truth_revenue
+
+    WHERE region = ''east'' AND month BETWEEN ''2025-01'' AND ''2025-12''
+
+    '
+  notes: Cumulative official net revenue for one region over Jan to Dec 2025, converted
+    from fen to CNY.
+- qid: C-H09
+  set: C
+  author: haiku
+  lang: en
+  question: On average, how many minutes did each subscriber who was active at the
+    start of January 2026 watch during January? Give the mean per subscriber.
+  keys: []
+  unit: minutes
+  months:
+  - 2026-01
+  - 2026-01
+  truth_sql: 'SELECT AVG(minutes) AS value
+
+    FROM truth_customer_month
+
+    WHERE month = ''2026-01'' AND at_risk
+
+    '
+  notes: Mean minutes per non-test subscriber active at the start of January 2026.
+    Customers who signed up during the month are excluded, and so are customers with
+    zero minutes who are not in the table for that month.
+- qid: C-H10
+  set: C
+  author: haiku
+  lang: en
+  question: What was the highest three-month net revenue any single region reached
+    in Q4 2025? Give the value in CNY.
+  keys: []
+  unit: cny
+  months:
+  - 2025-10
+  - 2025-12
+  truth_sql: "SELECT MAX(s) / 100.0 AS value\nFROM (\n  SELECT region, SUM(net_revenue_fen)\
+    \ AS s\n  FROM truth_revenue\n  WHERE month BETWEEN '2025-10' AND '2025-12'\n\
+    \  GROUP BY region\n) r\n"
+  notes: Max over regions of Q4 2025 net revenue, converted to CNY. Returns the single
+    top value, not the region name.
+- qid: C-H11
+  set: C
+  author: haiku
+  lang: en
+  question: How many support tickets were opened per subscriber in February 2026?
+    Give the ratio of total tickets to subscribers active at the start of February,
+    as a decimal.
+  keys: []
+  unit: other
+  months:
+  - 2026-02
+  - 2026-02
+  truth_sql: 'SELECT CAST(SUM(tickets) AS DOUBLE) / COUNT(DISTINCT customer_id) AS
+    value
+
+    FROM truth_customer_month
+
+    WHERE month = ''2026-02'' AND at_risk
+
+    '
+  notes: Tickets opened by non-test subscribers active at the start of February, divided
+    by that subscriber count. Tickets from customers who churned during February are
+    included.
+- qid: C-H12
+  set: C
+  author: haiku
+  lang: zh
+  question: 2025年12月，专业版用户的月流失率比基础版高还是低？请给出专业版流失率减去基础版流失率的带符号差值，单位是百分点。
+  keys: []
+  unit: percent
+  months:
+  - 2025-12
+  - 2025-12
+  truth_sql: "WITH r AS (\n  SELECT d.plan,\n         CAST(SUM(CASE WHEN t.churned\
+    \ THEN 1 ELSE 0 END) AS DOUBLE) / COUNT(DISTINCT t.customer_id) AS rate\n  FROM\
+    \ truth_customer_month t\n  JOIN dim_customer d ON d.customer_id = t.customer_id\n\
+    \  WHERE t.month = '2025-12' AND t.at_risk\n  GROUP BY d.plan\n)\nSELECT (MAX(CASE\
+    \ WHEN plan = 'pro' THEN rate END) - MAX(CASE WHEN plan = 'basic' THEN rate END))\
+    \ * 100 AS value\nFROM r\n"
+  notes: Gap between two official churn rates by plan, pro minus basic, in percentage
+    points (share difference x 100). Signed, so a negative value means pro churned
+    less.
+- qid: C-H13
+  set: C
+  author: haiku
+  lang: en
+  question: What was the average monthly plan price per active subscriber in July
+    2025, in CNY? Count only subscribers active at the start of the month.
+  keys: []
+  unit: cny
+  months:
+  - 2025-07
+  - 2025-07
+  truth_sql: 'SELECT AVG(price_fen) / 100.0 AS value
+
+    FROM truth_customer_month
+
+    WHERE month = ''2025-07'' AND at_risk
+
+    '
+  notes: Mean monthly charge per non-test subscriber active at the start of July 2025,
+    converted from fen to CNY. Add-ons and refunds are not part of plan price.
+- qid: C-H14
+  set: C
+  author: haiku
+  lang: en
+  question: How many subscribers churned in total during 2025, from January through
+    December? Count each subscriber once.
+  keys: []
+  unit: count
+  months:
+  - 2025-01
+  - 2025-12
+  truth_sql: 'SELECT COUNT(DISTINCT customer_id) AS value
+
+    FROM truth_customer_month
+
+    WHERE churned AND month BETWEEN ''2025-01'' AND ''2025-12''
+
+    '
+  notes: Count of distinct non-test customers whose subscription ended in any month
+    of 2025. The churned flag is only set for at-risk, non-test rows.
+- qid: C-H15
+  set: C
+  author: haiku
+  lang: en
+  question: What share of total net revenue in January 2026 came from the west region?
+    Give it as a share between 0 and 1.
+  keys: []
+  unit: share
+  months:
+  - 2026-01
+  - 2026-01
+  truth_sql: 'SELECT SUM(CASE WHEN region = ''west'' THEN net_revenue_fen ELSE 0 END)
+    * 1.0 / SUM(net_revenue_fen) AS value
+
+    FROM truth_revenue
+
+    WHERE month = ''2026-01''
+
+    '
+  notes: West net revenue divided by total net revenue for January 2026, both after
+    refunds and test-account exclusion. Share, not percent.
+- qid: C-H16
+  set: C
+  author: haiku
+  lang: en
+  question: What was the average monthly net revenue per region during 2025, in CNY?
+    Give one figure for each region.
+  keys:
+  - region
+  unit: cny
+  months:
+  - 2025-01
+  - 2025-12
+  truth_sql: "SELECT region, AVG(m) / 100.0 AS value\nFROM (\n  SELECT region, month,\
+    \ SUM(net_revenue_fen) AS m\n  FROM truth_revenue\n  WHERE month BETWEEN '2025-01'\
+    \ AND '2025-12'\n  GROUP BY region, month\n) r\nGROUP BY region\nORDER BY region\n"
+  notes: Mean of monthly net revenue per region over the 12 months of 2025 (region-months
+    with no revenue are not in the table, so the mean is over booked months only).
+    Converted to CNY.
+  dropped: same truth as B-H19
+- qid: C-H17
+  set: C
+  author: haiku
+  lang: en
+  question: For the March 2026 retention program, what was the effect measured as
+    control churn rate minus treatment churn rate, in percentage points, counting
+    every enrolled customer by their assigned arm?
+  keys: []
+  unit: percent
+  months:
+  - 2026-03
+  - 2026-03
+  truth_sql: "SELECT (AVG(CASE WHEN arm = 'control' THEN CAST(churned AS DOUBLE) END)\n\
+    \      - AVG(CASE WHEN arm = 'treatment' THEN CAST(churned AS DOUBLE) END)) *\
+    \ 100 AS value\nFROM truth_program\nWHERE campaign_month = '2026-03'\n"
+  notes: 'Intent-to-treat effect: control churn share minus treatment churn share,
+    all enrolments regardless of exposure, times 100 for percentage points. Positive
+    means the message reduced churn.'
+  dropped: same truth as B-L18
+- qid: C-H18
+  set: C
+  author: haiku
+  lang: en
+  question: How many customers were enrolled in the April 2026 retention program in
+    each arm? Give the count for treatment and for control.
+  keys:
+  - arm
+  unit: count
+  months:
+  - 2026-04
+  - 2026-04
+  truth_sql: 'SELECT arm, COUNT(*) AS value
+
+    FROM truth_program
+
+    WHERE campaign_month = ''2026-04''
+
+    GROUP BY arm
+
+    ORDER BY arm
+
+    '
+  notes: Enrolment rows for campaign month 2026-04 by randomised arm. Each enrolment
+    is one customer.
+- qid: C-H19
+  set: C
+  author: haiku
+  lang: zh
+  question: 2026年4月的挽留计划中，处理组里实际看到挽留消息的客户占比是多少？请给出0到1之间的小数，而不是百分比。
+  keys: []
+  unit: share
+  months:
+  - 2026-04
+  - 2026-04
+  truth_sql: 'SELECT AVG(CASE WHEN exposed THEN 1.0 ELSE 0.0 END) AS value
+
+    FROM truth_program
+
+    WHERE campaign_month = ''2026-04'' AND arm = ''treatment''
+
+    '
+  notes: Share of treatment-arm enrolments that were exposed to the message in April
+    2026. Control rows are excluded because they can never be exposed.
+- qid: C-H20
+  set: C
+  author: haiku
+  lang: en
+  question: Which month in 2025 had the highest monthly churn rate, and what was that
+    rate? Give it as a share between 0 and 1.
+  keys: []
+  unit: share
+  months:
+  - 2025-01
+  - 2025-12
+  truth_sql: "SELECT MAX(rate) AS value\nFROM (\n  SELECT month,\n         CAST(SUM(CASE\
+    \ WHEN churned THEN 1 ELSE 0 END) AS DOUBLE) / COUNT(DISTINCT customer_id) AS\
+    \ rate\n  FROM truth_customer_month\n  WHERE at_risk AND month BETWEEN '2025-01'\
+    \ AND '2025-12'\n  GROUP BY month\n) r\n"
+  notes: Max over the 12 months of 2025 of the official monthly churn rate. Returns
+    the peak rate only, not the month. The brief's mix (6 official, 8 derived, 3 program)
+    sums to 17, not 20, so the remaining slots were filled with derived questions
+    (q07-q16 and q20 make 11 derived in total).
+- qid: C-L21
+  set: C
+  author: luna
+  lang: en
+  question: What was the company’s net revenue in February 2026, including add-ons
+    and refunds, in fen?
+  keys: []
+  unit: fen
+  months:
+  - 2026-02
+  - 2026-02
+  truth_sql: 'SELECT SUM(net_revenue_fen) AS value
+
+    FROM truth_revenue
+
+    WHERE month = ''2026-02''
+
+    '
+  notes: The revenue table already excludes test accounts and includes charges, add-ons,
+    and refunds.
+  dropped: same truth as B-L01
+- qid: C-L22
+  set: C
+  author: luna
+  lang: en
+  question: How many non-test subscribers were active at the start of March 2026 in
+    each sales region?
+  keys:
+  - region
+  unit: count
+  months:
+  - 2026-03
+  - 2026-03
+  truth_sql: "SELECT d.region, COUNT(DISTINCT cm.customer_id) AS value\nFROM truth_customer_month\
+    \ cm\nJOIN dim_customer d ON d.customer_id = cm.customer_id\nWHERE cm.month =\
+    \ '2026-03'\n  AND cm.active_at_start\n  AND NOT cm.is_test\nGROUP BY d.region\n"
+  notes: Counts distinct non-test customers active at the start of the month.
+  dropped: same truth as B-L02
+- qid: C-L23
+  set: C
+  author: luna
+  lang: en
+  question: How many non-test customers churned during April 2026?
+  keys: []
+  unit: count
+  months:
+  - 2026-04
+  - 2026-04
+  truth_sql: "SELECT COUNT(DISTINCT customer_id) AS value\nFROM truth_customer_month\n\
+    WHERE month = '2026-04'\n  AND at_risk\n  AND churned\n"
+  notes: The at-risk flag restricts churn to non-test customers active at the start
+    of the month.
+- qid: C-L24
+  set: C
+  author: luna
+  lang: zh
+  question: 2026年5月的客户流失率是多少？请用比例表示（0到1之间），不要换算成百分比。
+  keys: []
+  unit: share
+  months:
+  - 2026-05
+  - 2026-05
+  truth_sql: "SELECT\n  SUM(CASE WHEN churned THEN 1 ELSE 0 END) * 1.0\n  / NULLIF(COUNT(*),\
+    \ 0) AS value\nFROM truth_customer_month\nWHERE month = '2026-05'\n  AND at_risk\n"
+  notes: 按官方定义，以月初活跃的非测试客户为分母。
+- qid: C-L25
+  set: C
+  author: luna
+  lang: en
+  question: What was January 2026 ARPU in fen per subscriber active at the start of
+    that month?
+  keys: []
+  unit: fen
+  months:
+  - 2026-01
+  - 2026-01
+  truth_sql: "SELECT\n  (SELECT SUM(net_revenue_fen)\n   FROM truth_revenue\n   WHERE\
+    \ month = '2026-01') * 1.0\n  / NULLIF(\n      (SELECT COUNT(DISTINCT customer_id)\n\
+    \       FROM truth_customer_month\n       WHERE month = '2026-01'\n         AND\
+    \ active_at_start\n         AND NOT is_test),\n      0\n    ) AS value\n"
+  notes: Uses net revenue for the month and distinct non-test subscribers active at
+    the start.
+  dropped: same truth as C-L04
+- qid: C-L26
+  set: C
+  author: luna
+  lang: en
+  question: How many non-test subscribers were active at the end of February 2026,
+    broken out by plan?
+  keys:
+  - plan
+  unit: count
+  months:
+  - 2026-02
+  - 2026-02
+  truth_sql: "SELECT d.plan, COUNT(DISTINCT cm.customer_id) AS value\nFROM truth_customer_month\
+    \ cm\nJOIN dim_customer d ON d.customer_id = cm.customer_id\nWHERE cm.month =\
+    \ '2026-03'\n  AND cm.active_at_start\n  AND NOT cm.is_test\nGROUP BY d.plan\n"
+  notes: End-of-February activity is measured as activity at the start of March.
+- qid: C-L27
+  set: C
+  author: luna
+  lang: en
+  question: By what percentage did net revenue grow from February to March 2026? Use
+    February revenue as the base and return the relative change as a percent.
+  keys: []
+  unit: percent
+  months:
+  - 2026-02
+  - 2026-03
+  truth_sql: "WITH monthly AS (\n  SELECT month, SUM(net_revenue_fen) AS revenue_fen\n\
+    \  FROM truth_revenue\n  WHERE month IN ('2026-02', '2026-03')\n  GROUP BY month\n\
+    )\nSELECT\n  100.0 * (MAX(CASE WHEN month = '2026-03' THEN revenue_fen END)\n\
+    \         - MAX(CASE WHEN month = '2026-02' THEN revenue_fen END))\n  / NULLIF(MAX(CASE\
+    \ WHEN month = '2026-02' THEN revenue_fen END), 0) AS value\nFROM monthly\n"
+  notes: Calculates the relative month-over-month change, multiplied by 100.
+- qid: C-L28
+  set: C
+  author: luna
+  lang: en
+  question: What share of April 2026 net revenue came from the north region? Return
+    a share from 0 to 1.
+  keys: []
+  unit: share
+  months:
+  - 2026-04
+  - 2026-04
+  truth_sql: "SELECT\n  SUM(CASE WHEN region = 'north' THEN net_revenue_fen ELSE 0\
+    \ END) * 1.0\n  / NULLIF(SUM(net_revenue_fen), 0) AS value\nFROM truth_revenue\n\
+    WHERE month = '2026-04'\n"
+  notes: Uses north-region net revenue divided by total net revenue for the month.
+- qid: C-L29
+  set: C
+  author: luna
+  lang: zh
+  question: 2026年4月，月初已处于活跃状态的非测试订阅用户，按套餐划分，人均观看了多少分钟？
+  keys:
+  - plan
+  unit: minutes
+  months:
+  - 2026-04
+  - 2026-04
+  truth_sql: "SELECT\n  d.plan,\n  SUM(cm.minutes) * 1.0 / NULLIF(COUNT(DISTINCT cm.customer_id),\
+    \ 0) AS value\nFROM truth_customer_month cm\nJOIN dim_customer d ON d.customer_id\
+    \ = cm.customer_id\nWHERE cm.month = '2026-04'\n  AND cm.active_at_start\n  AND\
+    \ NOT cm.is_test\nGROUP BY d.plan\n"
+  notes: 以月初活跃的非测试订阅用户为分母，按套餐汇总观看分钟。
+  dropped: same truth as B-L10
+- qid: C-L30
+  set: C
+  author: luna
+  lang: en
+  question: In February 2026, how many support tickets were opened per non-test subscriber
+    active at the start of the month, on average?
+  keys: []
+  unit: other
+  months:
+  - 2026-02
+  - 2026-02
+  truth_sql: "SELECT\n  SUM(tickets) * 1.0 / NULLIF(COUNT(DISTINCT customer_id), 0)\
+    \ AS value\nFROM truth_customer_month\nWHERE month = '2026-02'\n  AND active_at_start\n\
+    \  AND NOT is_test\n"
+  notes: Divides tickets opened that month by distinct non-test customers active at
+    the start.
+  dropped: same truth as C-H11
+- qid: C-L31
+  set: C
+  author: luna
+  lang: en
+  question: What share of non-test customers who signed up in January 2026 came through
+    each acquisition channel?
+  keys:
+  - channel
+  unit: share
+  months:
+  - 2026-01
+  - 2026-01
+  truth_sql: "WITH signups AS (\n  SELECT channel, customer_id\n  FROM dim_customer\n\
+    \  WHERE signup_month = '2026-01'\n    AND NOT is_test\n)\nSELECT\n  channel,\n\
+    \  COUNT(DISTINCT customer_id) * 1.0\n    / NULLIF((SELECT COUNT(DISTINCT customer_id)\
+    \ FROM signups), 0) AS value\nFROM signups\nGROUP BY channel\n"
+  notes: Each channel’s distinct non-test signups are divided by all non-test signups
+    in January.
+- qid: C-L32
+  set: C
+  author: luna
+  lang: zh
+  question: 2026年第一季度的累计净收入是多少元人民币？退款按实际退款月份计入。
+  keys: []
+  unit: cny
+  months:
+  - 2026-01
+  - 2026-03
+  truth_sql: 'SELECT SUM(net_revenue_fen) / 100.0 AS value
+
+    FROM truth_revenue
+
+    WHERE month BETWEEN ''2026-01'' AND ''2026-03''
+
+    '
+  notes: Sums monthly net revenue for the three calendar months and converts fen to
+    CNY.
+  dropped: same truth as B-L12
+- qid: C-L33
+  set: C
+  author: luna
+  lang: en
+  question: Which sales region had the highest net revenue in May 2026, and what was
+    its revenue in fen? If there is a tie, use the region name that comes first alphabetically.
+  keys:
+  - region
+  unit: fen
+  months:
+  - 2026-05
+  - 2026-05
+  truth_sql: 'SELECT region, SUM(net_revenue_fen) AS value
+
+    FROM truth_revenue
+
+    WHERE month = ''2026-05''
+
+    GROUP BY region
+
+    ORDER BY value DESC, region ASC
+
+    LIMIT 1
+
+    '
+  notes: Returns one region; alphabetical order breaks any tie for the highest revenue.
+  dropped: same truth as C-L13
+- qid: C-L34
+  set: C
+  author: luna
+  lang: en
+  question: In April 2026, by how many percentage points was the churn rate for paid-search
+    customers higher or lower than the rate for organic customers? Return paid search
+    minus organic.
+  keys: []
+  unit: percent
+  months:
+  - 2026-04
+  - 2026-04
+  truth_sql: "WITH rates AS (\n  SELECT\n    d.channel,\n    SUM(CASE WHEN cm.churned\
+    \ THEN 1 ELSE 0 END) * 100.0\n      / NULLIF(COUNT(*), 0) AS rate_percent\n  FROM\
+    \ truth_customer_month cm\n  JOIN dim_customer d ON d.customer_id = cm.customer_id\n\
+    \  WHERE cm.month = '2026-04'\n    AND cm.at_risk\n    AND d.channel IN ('paid_search',\
+    \ 'organic')\n  GROUP BY d.channel\n)\nSELECT\n  MAX(CASE WHEN channel = 'paid_search'\
+    \ THEN rate_percent END)\n  - MAX(CASE WHEN channel = 'organic' THEN rate_percent\
+    \ END) AS value\nFROM rates\n"
+  notes: Computes each channel’s churn rate among non-test customers active at the
+    month start, then subtracts organic from paid search in percentage points.
+- qid: C-L35
+  set: C
+  author: luna
+  lang: en
+  question: For the March 2026 retention program, what was the churn rate in each
+    randomized arm? Count everyone enrolled in their assigned arm, whether or not
+    they saw the message.
+  keys:
+  - arm
+  unit: share
+  months:
+  - 2026-03
+  - 2026-03
+  truth_sql: "SELECT\n  p.arm,\n  SUM(CASE WHEN p.churned THEN 1 ELSE 0 END) * 1.0\n\
+    \    / NULLIF(COUNT(DISTINCT p.customer_id), 0) AS value\nFROM truth_program p\n\
+    JOIN dim_customer d ON d.customer_id = p.customer_id\nWHERE p.campaign_month =\
+    \ '2026-03'\n  AND NOT d.is_test\nGROUP BY p.arm\n"
+  notes: Uses intent-to-treat assignment and excludes test accounts.
+  dropped: same truth as C-L15
+- qid: C-L36
+  set: C
+  author: luna
+  lang: en
+  question: For the April 2026 retention program, what was the intent-to-treat effect
+    on churn as a share? Calculate control-arm churn rate minus treatment-arm churn
+    rate, regardless of message exposure.
+  keys: []
+  unit: share
+  months:
+  - 2026-04
+  - 2026-04
+  truth_sql: "WITH rates AS (\n  SELECT\n    p.arm,\n    SUM(CASE WHEN p.churned THEN\
+    \ 1 ELSE 0 END) * 1.0\n      / NULLIF(COUNT(DISTINCT p.customer_id), 0) AS churn_rate\n\
+    \  FROM truth_program p\n  JOIN dim_customer d ON d.customer_id = p.customer_id\n\
+    \  WHERE p.campaign_month = '2026-04'\n    AND NOT d.is_test\n  GROUP BY p.arm\n\
+    )\nSELECT\n  MAX(CASE WHEN arm = 'control' THEN churn_rate END)\n  - MAX(CASE\
+    \ WHEN arm = 'treatment' THEN churn_rate END) AS value\nFROM rates\n"
+  notes: Calculates the official program effect as control rate minus treatment rate
+    using assigned arms.
+  dropped: same truth as C-L16
+- qid: C-L37
+  set: C
+  author: luna
+  lang: en
+  question: Pooling the March through May 2026 retention campaigns, what was the intent-to-treat
+    churn rate in each arm? Count each enrolment in its assigned arm, regardless of
+    exposure.
+  keys:
+  - arm
+  unit: share
+  months:
+  - 2026-03
+  - 2026-05
+  truth_sql: "SELECT\n  p.arm,\n  SUM(CASE WHEN p.churned THEN 1 ELSE 0 END) * 1.0\n\
+    \    / NULLIF(COUNT(DISTINCT p.customer_id), 0) AS value\nFROM truth_program p\n\
+    JOIN dim_customer d ON d.customer_id = p.customer_id\nWHERE p.campaign_month BETWEEN\
+    \ '2026-03' AND '2026-05'\n  AND NOT d.is_test\nGROUP BY p.arm\n"
+  notes: Pools enrolments across the three campaign months and calculates each arm’s
+    churn share by assigned arm.
+- qid: C-H21
+  set: C
+  author: haiku
+  lang: en
+  question: What was our total net revenue for March 2026, in CNY?
+  keys: []
+  unit: cny
+  months:
+  - 2026-03
+  - 2026-03
+  truth_sql: 'SELECT SUM(net_revenue_fen) / 100.0 AS value
+
+    FROM truth_revenue
+
+    WHERE month = ''2026-03''
+
+    '
+  notes: Official net revenue (charges + add-ons - refunds booked in the month). truth_revenue
+    already excludes test accounts. Converted fen to CNY.
+- qid: C-H22
+  set: C
+  author: haiku
+  lang: en
+  question: For January 2026, what was the churn rate in each sales region? Give it
+    as a share between 0 and 1, not a percentage.
+  keys:
+  - region
+  unit: share
+  months:
+  - 2026-01
+  - 2026-01
+  truth_sql: "SELECT d.region,\n       SUM(CASE WHEN t.churned THEN 1 ELSE 0 END)\
+    \ * 1.0 / COUNT(*) AS value\nFROM truth_customer_month t\nJOIN dim_customer d\
+    \ ON d.customer_id = t.customer_id\nWHERE t.month = '2026-01'\n  AND t.at_risk\n\
+    \  AND NOT d.is_test\nGROUP BY d.region\n"
+  notes: 'Official churn rate: churned / active at start of month. at_risk already
+    excludes test accounts and non-active rows, so COUNT(*) over at_risk rows is the
+    denominator. Region from dim_customer.'
+- qid: C-H23
+  set: C
+  author: haiku
+  lang: en
+  question: How many subscribers did we have at the end of December 2025, broken down
+    by plan?
+  keys:
+  - plan
+  unit: count
+  months:
+  - 2025-12
+  - 2025-12
+  truth_sql: "SELECT d.plan, COUNT(DISTINCT t.customer_id) AS value\nFROM truth_customer_month\
+    \ t\nJOIN dim_customer d ON d.customer_id = t.customer_id\nWHERE t.month = '2026-01'\n\
+    \  AND t.active_at_start\n  AND NOT t.is_test\n  AND NOT d.is_test\nGROUP BY d.plan\n"
+  notes: 'Official definition: active at end of month equals active at start of the
+    next month, so the January 2026 start-of-month population is used.'
+- qid: C-H24
+  set: C
+  author: haiku
+  lang: en
+  question: What was ARPU in April 2026, in fen? Use the company's standard definition
+    and do not round the result.
+  keys: []
+  unit: fen
+  months:
+  - 2026-04
+  - 2026-04
+  truth_sql: "WITH r AS (\n  SELECT SUM(net_revenue_fen) AS rev\n  FROM truth_revenue\n\
+    \  WHERE month = '2026-04'\n),\ns AS (\n  SELECT COUNT(DISTINCT customer_id) AS\
+    \ n\n  FROM truth_customer_month\n  WHERE month = '2026-04'\n    AND at_risk\n\
+    )\nSELECT r.rev * 1.0 / s.n AS value\nFROM r, s\n"
+  notes: 'Official ARPU: net revenue of the month / active subscribers at start of
+    month. Unrounded fen value.'
+  dropped: same truth as B-H05
+- qid: C-H25
+  set: C
+  author: haiku
+  lang: en
+  question: How much net revenue did the East region bring in during Q1 2026 (January
+    to March), in fen?
+  keys: []
+  unit: fen
+  months:
+  - 2026-01
+  - 2026-03
+  truth_sql: "SELECT SUM(net_revenue_fen) AS value\nFROM truth_revenue\nWHERE region\
+    \ = 'east'\n  AND month BETWEEN '2026-01' AND '2026-03'\n"
+  notes: Official net revenue summed over three months. Answer in fen, not CNY.
+- qid: C-H26
+  set: C
+  author: haiku
+  lang: zh
+  question: 2026年5月初（即5月1日开始时）处于有效订阅状态的用户一共有多少，按获取渠道分别是多少？不含内部测试账号。
+  keys:
+  - channel
+  unit: count
+  months:
+  - 2026-05
+  - 2026-05
+  truth_sql: "SELECT d.channel, COUNT(DISTINCT t.customer_id) AS value\nFROM truth_customer_month\
+    \ t\nJOIN dim_customer d ON d.customer_id = t.customer_id\nWHERE t.month = '2026-05'\n\
+    \  AND t.at_risk\n  AND NOT d.is_test\nGROUP BY d.channel\n"
+  notes: 'Official definition: active subscribers at start of month, which is the
+    at_risk population. Channel from dim_customer.'
+  dropped: same truth as C-L06
+- qid: C-H27
+  set: C
+  author: haiku
+  lang: en
+  question: By what share did net revenue grow from February 2026 to March 2026? Express
+    it as a decimal share, not a percentage, and use total net revenue across all
+    regions.
+  keys: []
+  unit: share
+  months:
+  - 2026-02
+  - 2026-03
+  truth_sql: "SELECT (SUM(CASE WHEN month = '2026-03' THEN net_revenue_fen END)\n\
+    \      - SUM(CASE WHEN month = '2026-02' THEN net_revenue_fen END)) * 1.0\n  \
+    \     / SUM(CASE WHEN month = '2026-02' THEN net_revenue_fen END) AS value\nFROM\
+    \ truth_revenue\nWHERE month IN ('2026-02', '2026-03')\n"
+  notes: 'Month-over-month growth: (March - February) / February, using official net
+    revenue.'
+  dropped: same truth as C-L27
+- qid: C-H28
+  set: C
+  author: haiku
+  lang: en
+  question: For 2025 as a whole, which two sales regions brought in the most net revenue,
+    and how much did each bring in, in CNY?
+  keys:
+  - region
+  unit: cny
+  months:
+  - 2025-01
+  - 2025-12
+  truth_sql: "WITH r AS (\n  SELECT region, SUM(net_revenue_fen) / 100.0 AS value\n\
+    \  FROM truth_revenue\n  WHERE month BETWEEN '2025-01' AND '2025-12'\n  GROUP\
+    \ BY region\n  ORDER BY value DESC\n  LIMIT 2\n)\nSELECT region, value\nFROM r\n\
+    ORDER BY value DESC\n"
+  notes: Top-2 regions by full-year 2025 official net revenue. Returns only the two
+    top rows. Ties are not expected at this granularity.
+- qid: C-H29
+  set: C
+  author: haiku
+  lang: en
+  question: In April 2026, on average how many minutes did each active subscriber
+    watch, broken down by plan? Count only subscribers who were active at the start
+    of April, including any who cancelled during the month.
+  keys:
+  - plan
+  unit: minutes
+  months:
+  - 2026-04
+  - 2026-04
+  truth_sql: "SELECT d.plan,\n       SUM(t.minutes) * 1.0 / COUNT(*) AS value\nFROM\
+    \ truth_customer_month t\nJOIN dim_customer d ON d.customer_id = t.customer_id\n\
+    WHERE t.month = '2026-04'\n  AND t.at_risk\n  AND NOT d.is_test\nGROUP BY d.plan\n"
+  notes: Average minutes per start-of-month subscriber-month. Denominator is the at_risk
+    population, so customers who signed up during the month are excluded. Churned-in-month
+    customers are included.
+  dropped: same truth as B-L10
+- qid: C-H30
+  set: C
+  author: haiku
+  lang: en
+  question: What share of total net revenue from January to May 2026 came from the
+    South region? Give a decimal share, not a percentage.
+  keys: []
+  unit: share
+  months:
+  - 2026-01
+  - 2026-05
+  truth_sql: "SELECT SUM(CASE WHEN region = 'south' THEN net_revenue_fen ELSE 0 END)\
+    \ * 1.0\n       / SUM(net_revenue_fen) AS value\nFROM truth_revenue\nWHERE month\
+    \ BETWEEN '2026-01' AND '2026-05'\n"
+  notes: South net revenue divided by total net revenue over the five-month window.
+- qid: C-H31
+  set: C
+  author: haiku
+  lang: en
+  question: How did the churn rate in February 2026 compare with February 2025? Give
+    the difference as a share (for example 0.01 means one percentage point), with
+    the 2026 rate minus the 2025 rate.
+  keys: []
+  unit: share
+  months:
+  - 2025-02
+  - 2026-02
+  truth_sql: "WITH c AS (\n  SELECT month,\n         SUM(CASE WHEN churned THEN 1\
+    \ ELSE 0 END) * 1.0 / COUNT(*) AS rate\n  FROM truth_customer_month\n  WHERE month\
+    \ IN ('2025-02', '2026-02')\n    AND at_risk\n  GROUP BY month\n)\nSELECT MAX(CASE\
+    \ WHEN month = '2026-02' THEN rate END)\n     - MAX(CASE WHEN month = '2025-02'\
+    \ THEN rate END) AS value\nFROM c\n"
+  notes: Difference of two official churn rates, expressed as a share. Negative means
+    churn fell.
+- qid: C-H32
+  set: C
+  author: haiku
+  lang: en
+  question: What was the cumulative net revenue, in CNY, at the end of each month
+    from January through May 2026? Give one row per month with the running total since
+    January.
+  keys:
+  - month
+  unit: cny
+  months:
+  - 2026-01
+  - 2026-05
+  truth_sql: "WITH m AS (\n  SELECT month, SUM(net_revenue_fen) AS rev\n  FROM truth_revenue\n\
+    \  WHERE month BETWEEN '2026-01' AND '2026-05'\n  GROUP BY month\n)\nSELECT a.month,\
+    \ SUM(b.rev) / 100.0 AS value\nFROM m a\nJOIN m b ON b.month <= a.month\nGROUP\
+    \ BY a.month\nORDER BY a.month\n"
+  notes: Running total of official monthly net revenue. Aggregated per month before
+    the self-join to avoid multiplying by region count.
+- qid: C-H33
+  set: C
+  author: haiku
+  lang: zh
+  question: 2025年全年，各获取渠道的订阅用户平均每人每月提交多少张客服工单？只统计用户在每月月初处于订阅状态的月份，不含内部测试账号。
+  keys:
+  - channel
+  unit: other
+  months:
+  - 2025-01
+  - 2025-12
+  truth_sql: "SELECT d.channel,\n       SUM(t.tickets) * 1.0 / COUNT(*) AS value\n\
+    FROM truth_customer_month t\nJOIN dim_customer d ON d.customer_id = t.customer_id\n\
+    WHERE t.month BETWEEN '2025-01' AND '2025-12'\n  AND t.at_risk\n  AND NOT d.is_test\n\
+    GROUP BY d.channel\n"
+  notes: Tickets per subscriber-month, unit is tickets per subscriber-month (not a
+    share). Numerator and denominator both restricted to at_risk rows for consistency
+    with the start-of-month subscriber base.
+- qid: C-H34
+  set: C
+  author: haiku
+  lang: zh
+  question: 2025年全年，各获取渠道的订阅用户平均每人每月观看多少分钟？同样只统计每月月初处于订阅状态的用户，不含内部测试账号。
+  keys:
+  - channel
+  unit: minutes
+  months:
+  - 2025-01
+  - 2025-12
+  truth_sql: "SELECT d.channel,\n       SUM(t.minutes) * 1.0 / COUNT(*) AS value\n\
+    FROM truth_customer_month t\nJOIN dim_customer d ON d.customer_id = t.customer_id\n\
+    WHERE t.month BETWEEN '2025-01' AND '2025-12'\n  AND t.at_risk\n  AND NOT d.is_test\n\
+    GROUP BY d.channel\n"
+  notes: Minutes per start-of-month subscriber-month, averaged over all 2025 subscriber-months.
+    Restricted to at_risk rows.
+- qid: C-H35
+  set: C
+  author: haiku
+  lang: en
+  question: For the March 2026 retention program, what was the churn rate in each
+    arm? Count everyone enrolled in each arm, whether or not they actually saw the
+    retention message, and give a share between 0 and 1.
+  keys:
+  - arm
+  unit: share
+  months:
+  - 2026-03
+  - 2026-03
+  truth_sql: "SELECT p.arm,\n       AVG(CASE WHEN p.churned THEN 1.0 ELSE 0.0 END)\
+    \ AS value\nFROM truth_program p\nJOIN dim_customer d ON d.customer_id = p.customer_id\n\
+    WHERE p.campaign_month = '2026-03'\n  AND NOT d.is_test\nGROUP BY p.arm\n"
+  notes: 'Intent-to-treat: grouped by randomised arm, not exposure. Share of enrolled
+    customers who churned in March 2026. Test accounts excluded via dim_customer.'
+  dropped: same truth as C-L15
+- qid: C-H36
+  set: C
+  author: haiku
+  lang: en
+  question: Across all four campaign months combined (March to June 2026), what was
+    the retention program's effect on churn? Compute the control churn rate minus
+    the treatment churn rate, as a share (for example 0.02 for two percentage points),
+    counting each enrolment once and treating everyone by randomised arm.
+  keys: []
+  unit: share
+  months:
+  - 2026-03
+  - 2026-06
+  truth_sql: "WITH x AS (\n  SELECT p.arm,\n         CASE WHEN p.churned THEN 1.0\
+    \ ELSE 0.0 END AS c\n  FROM truth_program p\n  JOIN dim_customer d ON d.customer_id\
+    \ = p.customer_id\n  WHERE NOT d.is_test\n    AND p.campaign_month BETWEEN '2026-03'\
+    \ AND '2026-06'\n)\nSELECT AVG(CASE WHEN arm = 'control' THEN c END)\n     - AVG(CASE\
+    \ WHEN arm = 'treatment' THEN c END) AS value\nFROM x\n"
+  notes: 'Program effect as defined in the brief: control rate minus treatment rate,
+    intent-to-treat, pooled over every enrolment in the four campaign months (not
+    averaged across months).'
+- qid: C-H37
+  set: C
+  author: haiku
+  lang: en
+  question: For each campaign month from March to June 2026, what share of the treatment
+    customers actually saw the retention message? Give a decimal share for each month.
+  keys:
+  - campaign_month
+  unit: share
+  months:
+  - 2026-03
+  - 2026-06
+  truth_sql: "SELECT p.campaign_month,\n       AVG(CASE WHEN p.exposed THEN 1.0 ELSE\
+    \ 0.0 END) AS value\nFROM truth_program p\nJOIN dim_customer d ON d.customer_id\
+    \ = p.customer_id\nWHERE p.arm = 'treatment'\n  AND NOT d.is_test\n  AND p.campaign_month\
+    \ BETWEEN '2026-03' AND '2026-06'\nGROUP BY p.campaign_month\nORDER BY p.campaign_month\n"
+  notes: Exposure rate among treatment-arm enrolments only. Control is always unexposed,
+    so it is excluded from the denominator.
+- qid: C-H38
+  set: C
+  author: haiku
+  lang: en
+  question: How many customers churned in April 2026, broken down by plan?
+  keys:
+  - plan
+  unit: count
+  months:
+  - 2026-04
+  - 2026-04
+  truth_sql: "SELECT d.plan, COUNT(DISTINCT t.customer_id) AS value\nFROM truth_customer_month\
+    \ t\nJOIN dim_customer d ON d.customer_id = t.customer_id\nWHERE t.month = '2026-04'\n\
+    \  AND t.churned\n  AND NOT t.is_test\n  AND NOT d.is_test\nGROUP BY d.plan\n"
+  notes: Official churned customers count for the month, by plan. Only at_risk customers
+    can churn, so the population is consistent with the churn-rate definition.
+- qid: C-H39
+  set: C
+  author: haiku
+  lang: en
+  question: What was the total net revenue for January and February 2026 combined,
+    by sales region? Answer in fen.
+  keys:
+  - region
+  unit: fen
+  months:
+  - 2026-01
+  - 2026-02
+  truth_sql: 'SELECT region, SUM(net_revenue_fen) AS value
+
+    FROM truth_revenue
+
+    WHERE month IN (''2026-01'', ''2026-02'')
+
+    GROUP BY region
+
+    '
+  notes: Official net revenue summed over two months, by region. Answer in fen.
+- qid: C-H40
+  set: C
+  author: haiku
+  lang: en
+  question: In March 2026, how many minutes in total did our customers watch, by plan?
+    Include everyone who was a non-test customer that month, including those who signed
+    up or cancelled during the month.
+  keys:
+  - plan
+  unit: minutes
+  months:
+  - 2026-03
+  - 2026-03
+  truth_sql: "SELECT d.plan, SUM(t.minutes) AS value\nFROM truth_customer_month t\n\
+    JOIN dim_customer d ON d.customer_id = t.customer_id\nWHERE t.month = '2026-03'\n\
+    \  AND NOT t.is_test\n  AND NOT d.is_test\nGROUP BY d.plan\n"
+  notes: 'Total minutes (not per-subscriber). Includes every non-test row in the month.
+    Note: the brief''s category counts (6 official, 8 derived, 3 program) sum to 17,
+    so q18 to q20 are the three extra unassigned questions. Only three questions are
+    in Chinese (q06, q13, q14).'

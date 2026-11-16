@@ -1,0 +1,203 @@
+# E3b v2 blind request bank: written 2026-11-07 17:00 by Luna (gpt-6-luna, high) and Haiku 5.5 from
+# docs/experiments/E3b/author_brief.md (sha256 b54cb46b...), in the bwrap sandbox, without the checks, the pilot or
+# any key. Kept verbatim; none dropped (no near-repeats: same-topic pairs differ in grain or horizon).
+- id: lu01
+  author: luna
+  requester: Sales director
+  request: Which named buyers are most likely to place a product order in September 2025? Please send a ranked call list with
+    each buyer’s probability and their predicted order value.
+- id: lu02
+  author: luna
+  requester: CRM manager
+  request: We need to catch accounts that may be going quiet. Forecast which identified buyers who ordered recently are least
+    likely to order again by the end of November, and give us a ranked list for a retention check-in.
+- id: lu03
+  author: luna
+  requester: Finance director
+  request: Please forecast weekly product sales in GBP from September through November 2025, with a range around each forecast.
+    I need a number I can use in the budget.
+- id: lu04
+  author: luna
+  requester: Stock planner
+  request: What quantities of each catalogue item should we expect to sell in September and October? Please provide SKU-level
+    forecasts so we can review the replenishment plan.
+- id: lu05
+  author: luna
+  requester: Investor-relations lead
+  request: An investor asked whether our UK sales will keep growing this autumn. Forecast UK product sales for September to
+    November and compare the outlook with the same months last year.
+- id: lu06
+  author: luna
+  requester: Marketing manager
+  request: We plan to email buyers about our new autumn range in September. Can you predict which buyers will purchase from
+    the range that month, so we can prioritize the audience?
+- id: lu07
+  author: luna
+  requester: Key-account manager
+  request: For my largest accounts, forecast each buyer’s product spend in September and October. Please flag accounts whose
+    expected spend is materially below their recent buying pattern.
+- id: lu08
+  author: luna
+  requester: Operations manager
+  request: We are setting warehouse shifts for autumn. Forecast the number of product order lines we’ll need to pick each
+    week in September, October and November.
+- id: lu09
+  author: luna
+  requester: Finance analyst
+  request: Can you forecast how many cancellation lines and how much cancellation value we should expect each month through
+    November? I need to assess the likely effect on reported sales.
+- id: lu10
+  author: luna
+  requester: Board member
+  request: For the board pack, what is your best forecast of the number of identified buyers placing at least one product
+    order in each of the next three months? Please include uncertainty.
+- id: lu11
+  author: luna
+  requester: Export sales manager
+  request: We are deciding where to focus export sales effort this autumn. Forecast non-UK product sales by country for September
+    to November and identify the countries with the strongest expected demand.
+- id: lu12
+  author: luna
+  requester: Data-science lead
+  request: A vendor says its buyer-level model can identify accounts that will order in the next 30 days. Please backtest
+    that claim on our order history and tell me whether its performance looks good enough to use.
+- id: lu13
+  author: luna
+  requester: Warehouse lead
+  request: Please forecast weekly product quantities ordered across the business for September to November. We need to plan
+    picking capacity, especially if volumes are likely to spike.
+- id: lu14
+  author: luna
+  requester: Retention manager
+  request: We can afford 250 calls at £8 each in September. Predict which identified buyers are least likely to buy by November,
+    and rank them by expected future product spend if they do order.
+- id: lu15
+  author: luna
+  requester: Sales director
+  request: How many new identified buyers are we likely to see place their first recorded product order in each month from
+    September through November? Please give a forecast range for the autumn sales meeting.
+- id: lu16
+  author: luna
+  requester: CEO
+  request: In the meeting I said our best-selling product lines would continue gaining ground this autumn. Can you forecast
+    demand through November and tell me whether the data supports that statement?
+- id: lu17
+  author: luna
+  requester: Category manager
+  request: For each of our top 100 buyers, predict which catalogue items they are most likely to buy in September. A ranked
+    shortlist per buyer would help with our range recommendations.
+- id: lu18
+  author: luna
+  requester: Marketing manager
+  request: We’re considering a £5 discount on orders over £50 in October. Forecast how many additional orders and how much
+    extra product revenue the offer would generate, so I can decide whether to run it.
+- id: lu19
+  author: luna
+  requester: Treasury manager
+  request: Please forecast the cash we’ll collect from customer orders in September to November, by week. We need a range
+    for the cash-flow plan.
+- id: lu20
+  author: luna
+  requester: Sales operations manager
+  request: Our team says the top 20 buyers will account for at least half of product sales this autumn. Forecast their combined
+    share of product sales from September through November and tell me how likely that claim is.
+- id: ha01
+  author: haiku
+  requester: Sales director
+  request: Which of our current trade customers are most likely to place no order at all in September, October or November?
+    I need a named list I can hand to the account managers for calls next week, ranked by risk.
+- id: ha02
+  author: haiku
+  requester: CRM and retention manager
+  request: We have £40k for win-back emails to lapsed accounts this autumn. Who should we mail, and roughly how many orders
+    would we get back by end of November if we do?
+- id: ha03
+  author: haiku
+  requester: Finance controller
+  request: What will September to November revenue look like from product sales? Give me a central estimate and a range I
+    can put in the Q3 and Q4 forecast pack.
+- id: ha04
+  author: haiku
+  requester: Operations and stock planning lead
+  request: Forecast unit volumes for our top 50 catalogue items for October and November, by item. Purchasing needs to place
+    the Christmas orders on Monday.
+- id: ha05
+  author: haiku
+  requester: Board member
+  request: The MD said in the last meeting that repeat buying is going up and will carry us through the autumn. Is that true?
+    Give me a yes or no and the evidence behind it.
+- id: ha06
+  author: haiku
+  requester: Marketing manager
+  request: Which customers should get the October gift-guide mailing? We can only afford to send to 3,000 people, so I need
+    the 3,000 most likely to buy again before the end of November.
+- id: ha07
+  author: haiku
+  requester: Key-account manager
+  request: Our biggest reseller in the North has been slowing down. Will they order more or less than they did in the last
+    three months over September to November? I need a number for my pipeline review.
+- id: ha08
+  author: haiku
+  requester: Investor-relations lead
+  request: Investors will ask whether the customer base is growing or shrinking into Q4. What is our best estimate of active
+    trade customers for October 2025, and how confident are we in it?
+- id: ha09
+  author: haiku
+  requester: Data-science lead
+  request: Our vendor's churn tool says it is 90% accurate. Before we pay for renewal, check whether its style of prediction
+    would hold for our customers over the next three months, and tell us what it would actually catch.
+- id: ha10
+  author: haiku
+  requester: Sales director
+  request: Are UK customers going to spend more than non-UK customers in the coming quarter? I need to decide where to put
+    the export sales push budget, so a direct answer with figures would help.
+- id: ha11
+  author: haiku
+  requester: CRM and retention manager
+  request: A call from one of our reps costs about £18 in staff time. Which accounts are worth calling in September, given
+    each call should bring back at least £18 of margin? Our gross margin is about 35%.
+- id: ha12
+  author: haiku
+  requester: Finance controller
+  request: How much cancellation value should we provision for in September to November? We need a figure for the accruals
+    run at month end, and we would rather be slightly high than low.
+- id: ha13
+  author: haiku
+  requester: Marketing manager
+  request: Guest buyers seem to be a big share of orders. Will they come back to buy again this autumn? We are deciding whether
+    to spend on account sign-up incentives at checkout.
+- id: ha14
+  author: haiku
+  requester: Operations and stock planning lead
+  request: Give me a weekly order-count forecast for September through November so we can staff the packing team. Please include
+    a band for busy weeks.
+- id: ha15
+  author: haiku
+  requester: Board member
+  request: I want a single number for expected revenue from customers who bought in the last six months, for September to
+    November. Please keep it simple, I am not after the method.
+- id: ha16
+  author: haiku
+  requester: Key-account manager
+  request: Which of my twelve accounts are likely to place a bigger order than their average in October or November? I want
+    to know who to push for a seasonal top-up before Christmas.
+- id: ha17
+  author: haiku
+  requester: Investor-relations lead
+  request: Our CEO has told the press that repeat customers will drive most of our growth into 2026. For the next three months,
+    what share of revenue will come from repeat customers? Please check whether that claim is supportable.
+- id: ha18
+  author: haiku
+  requester: Data-science lead
+  request: We are thinking of replacing the simple reorder rule with a model that predicts next-order timing. Before we commit,
+    tell us how accurate it would be for September to November and where it would fail.
+- id: ha19
+  author: haiku
+  requester: Marketing manager
+  request: Which product categories will grow fastest from September to November? We are choosing which two lines to put in
+    the Christmas trade catalogue and need a ranked list.
+- id: ha20
+  author: haiku
+  requester: Sales director
+  request: 'Give me a yes or no: will at least 60% of the customers we are calling this month still buy from us in November?
+    Our board needs a retention target for the autumn plan.'

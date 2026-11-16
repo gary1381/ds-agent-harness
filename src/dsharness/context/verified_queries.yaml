@@ -1,0 +1,154 @@
+# Verified query repository: questions with a reviewed, known-correct way to answer them.
+#
+# Split rule (Snowflake/Genie practice): every entry is EITHER runtime context (shown to agents
+# as worked examples) OR evaluation ground truth (never exposed at runtime), never both.
+# If an eval question leaks into the agent's context, the benchmark measures recall, not skill.
+# Eval questions use different months and slices from every context example.
+#
+# Each entry has exactly one of:
+#   metric_call: {metric, dimensions, months: [first, last] inclusive, filters}
+#   sql:         certified SQL over silver.* (static analysis must pass with tier certified)
+
+queries:
+  # ------------------------------------------------------------------ context (runtime examples)
+  - id: vq_ctx_revenue_by_region_q4_2025
+    split: context
+    question: What was net revenue by region in each month of Q4 2025?
+    metric_call: {metric: net_revenue_fen, dimensions: [region], months: ["2025-10", "2025-12"]}
+
+  - id: vq_ctx_active_eom_by_plan_h2_2025
+    split: context
+    question: How many active subscribers did we have at the end of each month from July to December 2025, by plan?
+    metric_call: {metric: active_subscribers_eom, dimensions: [plan], months: ["2025-07", "2025-12"]}
+
+  - id: vq_ctx_churn_rate_2025
+    split: context
+    question: What was the monthly churn rate in 2025?
+    metric_call: {metric: churn_rate, dimensions: [], months: ["2025-01", "2025-12"]}
+
+  - id: vq_ctx_arpu_by_channel_2026_01
+    split: context
+    question: What was ARPU by acquisition channel in January 2026?
+    metric_call: {metric: arpu_fen, dimensions: [channel], months: ["2026-01", "2026-01"]}
+
+  - id: vq_ctx_addon_units_q3_2025
+    split: context
+    question: How many add-on packs were sold each month in Q3 2025?
+    metric_call: {metric: addon_units, dimensions: [], months: ["2025-07", "2025-09"]}
+    notes: Two identical add-ons bought by the same customer on the same day are two units.
+
+  - id: vq_ctx_refunds_2025
+    split: context
+    question: How much money was refunded each month in 2025 (fen)?
+    metric_call: {metric: net_revenue_fen, dimensions: [], months: ["2025-01", "2025-12"], filters: {invoice_type: refund}}
+    notes: Refunds are negative; they are booked in the month the refund was issued.
+
+  - id: vq_ctx_churned_by_region_2025_11
+    split: context
+    question: How many customers churned in each region in November 2025?
+    metric_call: {metric: churned_customers, dimensions: [region], months: ["2025-11", "2025-11"]}
+
+  - id: vq_ctx_csat_by_category_2025_12
+    split: context
+    question: What was the average CSAT per ticket category in December 2025?
+    metric_call: {metric: avg_csat, dimensions: [ticket_category], months: ["2025-12", "2025-12"]}
+
+  - id: vq_ctx_signups_2025
+    split: context
+    question: How many customers signed up in each month of 2025, excluding internal test accounts?
+    sql: |
+      SELECT strftime(created_at, '%Y-%m') AS month, COUNT(*) AS value
+      FROM silver.customers
+      WHERE NOT is_test_account
+        AND created_at >= TIMESTAMP '2025-01-01' AND created_at < TIMESTAMP '2026-01-01'
+      GROUP BY 1
+      ORDER BY 1
+
+  - id: vq_ctx_plan_prices_2026_05_01
+    split: context
+    question: What was the list price of each plan on 2026-05-01?
+    sql: |
+      SELECT plan, price_fen AS value
+      FROM silver.ref_plan_prices
+      WHERE DATE '2026-05-01' BETWEEN valid_from AND valid_to
+      ORDER BY plan
+    notes: Historical prices come from the price book, never from subscriptions.monthly_price_fen (current state).
+
+  - id: vq_ctx_finance_close_2025_12
+    split: context
+    question: What does Finance's closed book say net revenue was by region for December 2025?
+    sql: |
+      SELECT month, region, net_revenue_fen AS value
+      FROM silver.finance_closed_revenue
+      WHERE month = '2025-12'
+      ORDER BY region
+
+  - id: vq_ctx_program_enrolment_by_arm_2026
+    split: context
+    question: How many customers were enrolled in the retention program in each campaign month from March to May 2026, by arm?
+    metric_call: {metric: program_enrolled, dimensions: [arm], months: ["2026-03", "2026-05"]}
+    notes: Groups are the randomised arm (intent-to-treat). Never group by exposed.
+
+  - id: vq_ctx_program_itt_churn_by_arm_2026_04
+    split: context
+    question: What was the retention program's churn rate by arm (intent-to-treat) in April 2026?
+    metric_call: {metric: program_churn_rate, dimensions: [arm], months: ["2026-04", "2026-04"]}
+    notes: >-
+      The ITT effect is the control rate minus the treatment rate. Test the difference on the counts
+      (program_churned / program_enrolled) before calling it an effect.
+
+  - id: vq_ctx_program_exposure_2026
+    split: context
+    question: What share of treatment-arm enrolments actually saw the retention message in each campaign month from March to May 2026?
+    sql: |
+      SELECT campaign_month AS month, AVG(CAST(exposed AS DOUBLE)) AS value
+      FROM silver.retention_contacts
+      WHERE arm = 'treatment' AND campaign_month BETWEEN '2026-03' AND '2026-05'
+      GROUP BY 1
+      ORDER BY 1
+    notes: Compliance only. Exposure happens after randomisation; estimate effects by arm (ITT), never by exposed.
+
+  # ------------------------------------------------------------------ eval (never shown to agents)
+  - id: vq_eval_revenue_by_region_2026_03
+    split: eval
+    question: What was net revenue by region for March 2026?
+    metric_call: {metric: net_revenue_fen, dimensions: [region], months: ["2026-03", "2026-03"]}
+    traps: [D1, D3, D4, D5]
+
+  - id: vq_eval_active_eom_2026_04
+    split: eval
+    question: How many active subscribers did we have at the end of April 2026?
+    metric_call: {metric: active_subscribers_eom, dimensions: [], months: ["2026-04", "2026-04"]}
+    traps: [D5]
+
+  - id: vq_eval_churn_rate_2026_04
+    split: eval
+    question: What was the churn rate in April 2026?
+    metric_call: {metric: churn_rate, dimensions: [], months: ["2026-04", "2026-04"]}
+    traps: [D5]
+
+  - id: vq_eval_addon_units_2026_02
+    split: eval
+    question: How many add-on units were sold in February 2026?
+    metric_call: {metric: addon_units, dimensions: [], months: ["2026-02", "2026-02"]}
+    traps: [D1, D2, D5]
+
+  - id: vq_eval_arpu_2026_04
+    split: eval
+    question: What was ARPU in April 2026?
+    metric_call: {metric: arpu_fen, dimensions: [], months: ["2026-04", "2026-04"]}
+    traps: [D1, D4, D5]
+
+  - id: vq_eval_billing_csat_q1_2026
+    split: eval
+    question: What was the average CSAT of billing tickets in Q1 2026?
+    sql: |
+      SELECT AVG(t.csat) AS value
+      FROM silver.tickets t
+      JOIN silver.customers c ON c.customer_id = t.customer_id
+      WHERE NOT c.is_test_account
+        AND t.category = 'billing'
+        AND t.csat IS NOT NULL
+        AND t.created_at >= TIMESTAMP '2026-01-01' AND t.created_at < TIMESTAMP '2026-04-01'
+    traps: [D5]
+    notes: A quarterly mean over rated tickets. It is not the mean of the three monthly avg_csat values.

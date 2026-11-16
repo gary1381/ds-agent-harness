@@ -1,0 +1,229 @@
+# DS Harness promotion gates (policy-as-code). Loaded by dsharness.evidence.gate.load_policy().
+#
+# A stage is ALLOWed only when every required check's effective record is a fresh PASS from an
+# authorised producer AND the stage's approval quorum is met. Semantics (see evidence/gate.py):
+#   * records for another subject, for checks the stage does not require, from producers not
+#     listed below, or produced by the requester itself are IGNORED -- they cannot block or allow;
+#   * a record that claims an authorised producer but is malformed / edited / future-dated is
+#     UNVERIFIABLE -> HOLD until an authorised producer re-issues a valid record superseding it;
+#   * per check, the latest valid record wins (retried PASS after ERROR => PASS), except that a
+#     FAIL stands until an authorised record explicitly `supersedes` it;
+#   * effective FAIL -> REJECT; ERROR / INCONCLUSIVE / missing / expired / older than max_age_s -> HOLD;
+#   * anything here the gate cannot interpret (unknown key, unknown stage, bad type) -> REJECT:
+#     a configuration error is not permission.
+#
+# Producer identities. In this reference implementation a producer is a string *claim*
+# ("verifier:sql_static"). In production each one is a CI workload identity, not a person:
+#   verifier:*   -> the GitHub Actions OIDC subject of the verification job, e.g.
+#                   repo:acme/dsh:environment:verify  (job_workflow_ref pinned to the reviewed workflow)
+#   evaluator:*  -> the custody evaluator's service identity; only that job can read custody/
+#   ci:pipeline  -> the pipeline CI job identity
+#   experiment:readout -> the experiment-analysis job identity
+#   verifier:policy / verifier:uplift -> the policy-validation job identity (no custody access)
+# and every evidence record is shipped as an in-toto statement (subject = the artifact digest,
+# predicate = the record) signed through Sigstore by that identity (actions/attest), verified
+# with `gh attestation verify --signer-workflow ...` before the gate counts it. Approval roles map
+# to GitHub/GitLab protected-environment required reviewers (prevent self-review on) or IdP groups.
+# None of that cryptography is implemented here; the gate's authorise-before-count logic is the
+# same either way. See .github/workflows/dsh-gate.example.yml.
+
+version: 1
+policy_id: dsh-reference-gates
+
+defaults:
+  max_age_s: 2592000        # 30 days unless a check says otherwise
+  clock_skew_s: 60          # records issued later than now + skew are unverifiable
+
+# Optional role membership. When this section is present, approvals only count if the approver
+# is listed for the role (authorise approvers like producers). Left out of the reference policy so
+# that approver names are free-form claims; production derives membership from the IdP, e.g.:
+# roles:
+#   business_owner: {members: ["user:li.wei", "user:chen.jing"]}
+#   risk:           {members: ["user:zhao.min"]}
+
+checks:
+  # ---- analytics answers (W5 submit_answer) -------------------------------------------------
+  answer.sql_static:
+    description: >-
+      Static analysis of the SQL behind the answer (for governed metric calls: the compiled
+      metric SQL) has no hard violations: read-only single SELECT, no bronze.*, no PII columns,
+      no file/table functions.
+    allowed_producers: ["verifier:sql_static"]
+    max_age_s: 604800
+  answer.reexecution:
+    description: >-
+      Honesty check: re-executing the submitted SQL / metric call reproduces the submitted
+      answer rows. FAIL = the agent reported numbers its own query does not return.
+    allowed_producers: ["verifier:reconcile"]
+    max_age_s: 604800
+  answer.reconcile:
+    description: >-
+      The answer reconciles to the governed metric (and, for revenue totals, the finance-close
+      record). PASS = VERIFIED tier; INCONCLUSIVE = no governed metric/official record covers
+      the question (CONSISTENT tier, needs review => HOLD); FAIL = mismatch (FLAGGED => REJECT).
+    allowed_producers: ["verifier:reconcile"]
+    max_age_s: 604800
+
+  # ---- data engineering (W5 propose_pipeline_change) ----------------------------------------
+  pipeline.ci_build:
+    description: >-
+      The changed pipeline builds the newest cutoff READY: contracts, models and tests,
+      including the finance-close revenue reconciliation.
+    allowed_producers: ["ci:pipeline"]
+    max_age_s: 604800
+  pipeline.regression_diff:
+    description: >-
+      Rebuilding an already-served cutoff with the changed pipeline yields silver tables
+      identical to the current READY build (no silent change to published numbers), and on the
+      new (drift) export every silver table the governed pipeline could still build is identical
+      too -- only the tables the fix is about may differ.
+    allowed_producers: ["ci:pipeline"]
+    max_age_s: 604800
+  pipeline.oracle_independence:
+    description: >-
+      Every reconciliation still compares the pipeline with an INDEPENDENT record: in the model
+      ref graph, no model upstream of the reconciled side (e.g. silver.invoices) reads the oracle
+      (finance_closed_revenue), and the oracle model itself is unchanged. A pipeline calibrated to
+      the Finance table would otherwise pass the reconciliation by construction.
+    allowed_producers: ["ci:pipeline"]
+    max_age_s: 604800
+
+  # ---- data science ---------------------------------------------------------------------------
+  feature.leakage:
+    description: >-
+      Point-in-time check of a proposed feature: time-travel comparison between an early and a
+      late build AND static temporal check (mutable_current / post_outcome columns unguarded).
+      PASS only if both pass.
+    allowed_producers: ["verifier:leakage"]
+  model.leakage:
+    description: >-
+      Every feature the candidate uses is either TRUSTED or has an accepted feature.leakage
+      PASS for exactly that feature definition (recorded on the candidate subject).
+    allowed_producers: ["verifier:leakage"]
+  model.sealed_eval:
+    description: >-
+      Sealed final evaluation on custody labels the candidate never saw (holdout budget
+      enforced). PASS = meets the task's acceptance threshold with its bootstrap CI reported.
+    allowed_producers: ["evaluator:custody"]
+  model.champion_challenger:
+    description: >-
+      On matured labels, the retrained challenger is not worse than the current champion
+      (paired comparison with CI), evaluated by the custody evaluator.
+    allowed_producers: ["evaluator:custody"]
+    max_age_s: 604800
+
+  # ---- decisions (subject: a targeting POLICY = rule + models + channel + k, never a bare model) ---
+  policy.models:
+    description: >-
+      Every model the policy reads is released for use: a churn candidate's model_shadow gate is
+      ALLOW (sealed evaluation + leakage evidence) for exactly that artifact; an uplift model is
+      registered, its artifact digest verifies and it uses trusted point-in-time features only.
+    allowed_producers: ["verifier:policy"]
+    max_age_s: 604800
+  policy.offline_qini:
+    description: >-
+      Offline validation of the policy's ranking on the randomised 2026 retention program:
+      leave-one-campaign-month-out (learned uplift is refitted per fold), ITT on the randomised
+      arm (never `exposed`), Qini coefficient with a customer-cluster bootstrap 95% CI, plus the
+      realised held-out value per contact of the policy's operating point under its channel's
+      costs. PASS = validated on >= 2 matured held-out months, Qini upper bound >= 0 and operating
+      value upper bound >= 0; FAIL = either upper bound < 0 (worse than random, or already lost
+      money on held-out randomised campaigns: do not spend an experiment on it); INCONCLUSIVE =
+      too little held-out data. A PASS is a screen, not evidence of value: only
+      experiment.readout is.
+    allowed_producers: ["verifier:uplift"]
+    max_age_s: 604800
+  experiment.readout:
+    description: >-
+      Randomised experiment readout for THIS policy (its own stratum of a pre-registered
+      experiment): SRM ok, sufficient n, value-per-contact CI (after contact + offer costs of the
+      policy's channel) excludes 0. INCONCLUSIVE (CI spans 0) => HOLD, never "probably works";
+      FAIL (value CI below 0, or SRM) => REJECT.
+    allowed_producers: ["experiment:readout"]
+
+  # ---- evaluation readouts (dsharness.readout: is a written conclusion supported by its items?) ----
+  readout.errors_excluded:
+    description: No answer that failed with an error was scored. FAIL = error rows counted as wrong answers.
+    allowed_producers: ["verifier:readout"]
+  readout.same_judge:
+    description: Both arms were scored by the same judge (unless the comparison is about the judge).
+    allowed_producers: ["verifier:readout"]
+  readout.same_answer_model:
+    description: Both arms were answered by the same model (unless the comparison is about the model).
+    allowed_producers: ["verifier:readout"]
+  readout.repeat_runs:
+    description: At least two independent runs per arm, so run-to-run noise is measured. One run => INCONCLUSIVE.
+    allowed_producers: ["verifier:readout"]
+  readout.paired_items:
+    description: The arms were scored on the same items (paired comparison).
+    allowed_producers: ["verifier:readout"]
+  readout.interval:
+    description: >-
+      The recomputed paired 95% interval supports the written verdict. "passed" needs it above 0;
+      "equal" needs it inside the stated margin (else INCONCLUSIVE: no power to show equality).
+    allowed_producers: ["verifier:readout"]
+  readout.second_judge:
+    description: >-
+      A "passed" or "worse" delta smaller than the stated small effect (default 2 points) also
+      holds under a second judge. No second judge => INCONCLUSIVE; it does not survive => FAIL.
+    allowed_producers: ["verifier:readout"]
+  readout.no_wiring_fault:
+    description: The arms did not return identical answers everywhere (an unwired arm switch).
+    allowed_producers: ["verifier:readout"]
+  readout.same_batch:
+    description: Control was answered in the same runs as the treatment, not taken from older runs.
+    allowed_producers: ["verifier:readout"]
+
+stages:
+  answer_publish:
+    description: Publish an analytics answer as an official number.
+    requires: [answer.sql_static, answer.reexecution, answer.reconcile]
+
+  pipeline_merge:
+    description: >-
+      Merge a pipeline change. Code review itself is enforced by branch protection in the
+      repository host; this gate adds the data evidence a reviewer cannot eyeball.
+    requires: [pipeline.ci_build, pipeline.regression_diff, pipeline.oracle_independence]
+
+  feature_accept:
+    description: Add a proposed feature to the accepted feature set.
+    requires: [feature.leakage]
+
+  model_shadow:
+    description: Run a candidate in shadow (scores logged, no customer-facing action).
+    requires: [model.sealed_eval, model.leakage]
+
+  model_experiment:
+    description: >-
+      Use a targeting policy (subject kind=policy: rule + released models + channel + k) in a
+      limited, pre-registered randomised experiment. The policy's models must be released and its
+      ranking must survive offline validation on the historical randomised program.
+    requires: [policy.models, policy.offline_qini]
+    approvals:
+      - {role: business_owner, count: 1, no_self_approval: true}
+
+  model_scale:
+    description: >-
+      Scale a targeting policy to all eligible customers. Requires THIS policy's own PASSing
+      experiment readout (value after channel costs, CI above 0) -- predicted risk or predicted
+      uplift is not demonstrated value, and another policy's readout does not transfer.
+    requires: [policy.models, policy.offline_qini, experiment.readout]
+    approvals:
+      - {role: business_owner, count: 1, no_self_approval: true}
+      - {role: risk, count: 1, no_self_approval: true}
+
+  retrain_promote:
+    description: >-
+      Replace the serving model with a retrained one (e.g. after drift). Never automatic:
+      needs a champion/challenger comparison and a risk sign-off.
+    requires: [model.sealed_eval, model.leakage, model.champion_challenger]
+    approvals:
+      - {role: risk, count: 1, no_self_approval: true}
+
+  readout_publish:
+    description: >-
+      Record an evaluation conclusion ("X beats Y", "X = Y", "not passed") as a project result.
+      Every readout check must PASS; a single-run or underpowered "equal" claim is held, not rejected.
+    requires: [readout.errors_excluded, readout.same_judge, readout.same_answer_model, readout.repeat_runs,
+               readout.paired_items, readout.interval, readout.second_judge, readout.no_wiring_fault,
+               readout.same_batch]

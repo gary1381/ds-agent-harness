@@ -1,0 +1,222 @@
+{
+ "gross_product_sales": {
+  "en": [
+   "What were our gross product sales in March 2025?",
+   "Total product sales before cancellations for Q3, please",
+   "How much gross product revenue did we book in the UK market in July?",
+   "Gross merchandise value for September 2025?",
+   "What's the total value of all product lines in June, ignoring cancellations?",
+   "Sum up gross product sales for 2025 so far in GBP",
+   "Gross sales figure for November, before any cancellations come off?",
+   "whats our gross product turnover in Q2 2025, no cancels deducted"
+  ],
+  "zh": [
+   "2025年3月的毛产品销售额是多少？",
+   "帮我看一下10月的产品销售总额，不扣取消的那种",
+   "英国市场今年7月的毛产品销售额是多少英镑？",
+   "2025年第三季度的产品毛销售额是多少？",
+   "gross sales 一下2025年8月，按英镑算",
+   "总产品销售额（取消前）是多少？按月给我",
+   "海外市场2025年5月产品行的总金额是多少？",
+   "11月的毛销售额多少钱？取消前的那个"
+  ]
+ },
+ "cancelled_value": {
+  "en": [
+   "How much money was cancelled in August 2025?",
+   "Total value of cancelled orders in GBP for Q2 2025?",
+   "What's the cancelled amount in pounds for the UK in April?",
+   "How much revenue did we lose to cancellations in May?",
+   "Value of cancellation lines for 2025 so far",
+   "Cancelled sales total, month by month, please",
+   "How much did customers cancel in September, in £?",
+   "cancel value march 2025 pls"
+  ],
+  "zh": [
+   "2025年8月取消的金额一共多少英镑？",
+   "9月被取消的订单总价值是多少？",
+   "英国市场4月被取消的货值是多少？",
+   "今年前几个月因为取消一共损失了多少钱？",
+   "取消单金额，按月列一下",
+   "海外客户11月取消了多少英镑的货？",
+   "2025年第二季度的取消总额是多少？",
+   "取消的金额有多少？3月的"
+  ]
+ },
+ "net_product_sales": {
+  "en": [
+   "What were net product sales in September 2025?",
+   "Net sales after cancellations for the UK in Q2",
+   "How much net product revenue did we make in March?",
+   "Net sales figure for 2025 year to date, in pounds",
+   "Product sales minus cancellations for June, please",
+   "What's our net turnover after cancels in October?",
+   "Net merchandise sales for overseas markets in July?",
+   "net prod sales last month (nov) gbp"
+  ],
+  "zh": [
+   "2025年9月的净产品销售额是多少？",
+   "英国市场第二季度扣掉取消后的净销售额是多少？",
+   "10月的净销售多少英镑？",
+   "今年到现在的净销售总额是多少？",
+   "毛销售减去取消金额后，7月是多少？",
+   "海外市场5月的净营收（扣除取消之后）是多少？",
+   "8月实际卖出的产品金额（扣掉取消）是多少？",
+   "11月的净产品销售额，英镑"
+  ]
+ },
+ "cancellation_rate": {
+  "en": [
+   "What percentage of our sales got cancelled in March 2025?",
+   "Cancellation rate for the UK market in Q3?",
+   "What share of gross sales is cancelled each month?",
+   "cancel % for September please",
+   "Ratio of cancelled value to gross product sales in June?",
+   "How often do orders get cancelled, as a percent of sales, in October 2025?",
+   "cancelation rate for overseas shops, last few months",
+   "What fraction of our product value ends up cancelled in August?"
+  ],
+  "zh": [
+   "2025年3月的取消率是多少？",
+   "英国市场各月的取消比例（占毛销售额的百分比）是多少？",
+   "取消金额占销售额的百分之多少？10月的",
+   "今年每个月的取消占比，按百分比给我",
+   "海外市场6月的取消比例是多少？",
+   "9月的取消率高不高？给我具体数字",
+   "2025年第三季度销售额被取消的比例是多少？",
+   "cancel率多少？8月的"
+  ]
+ },
+ "orders": {
+  "en": [
+   "How many orders did we get in March 2025?",
+   "Number of orders for the UK market in Q3",
+   "Order count for August, please",
+   "How many purchase orders were placed in June?",
+   "Total orders year to date",
+   "How many orders came in from overseas customers in October?",
+   "ordrs in september?",
+   "How many separate orders did customers place in May?"
+  ],
+  "zh": [
+   "2025年3月一共有多少个订单？",
+   "英国市场第三季度的订单数是多少？",
+   "8月订单量多少？",
+   "客户6月下了多少单？",
+   "今年到目前为止的总订单数是多少？",
+   "海外市场10月有几笔订单？",
+   "11月的单数是多少？",
+   "按月统计一下订单数量"
+  ]
+ },
+ "average_order_value": {
+  "en": [
+   "What's the average order value in March 2025?",
+   "Avg basket size in GBP for the UK in Q2",
+   "How much does a typical order come to in September?",
+   "AOV for overseas markets in August, please",
+   "Average ticket per order, by month",
+   "What's our average spend per order in October, in pounds?",
+   "avrage order value 2025 so far",
+   "Typical order size in £ for June, on average"
+  ],
+  "zh": [
+   "2025年3月的客单价是多少？",
+   "英国市场第二季度平均每单多少英镑？",
+   "9月的平均订单金额是多少？",
+   "海外市场8月的AOV是多少？",
+   "每单平均消费多少钱？按月看",
+   "今年每个月的客单价走势怎么样？",
+   "一个订单平均下多少英镑？10月的",
+   "平均一单的金额（英镑）是多少？11月"
+  ]
+ },
+ "units_sold": {
+  "en": [
+   "How many units did we sell in March 2025?",
+   "Total units sold for the UK market in Q3",
+   "How many pieces sold in August?",
+   "Quantity sold year to date",
+   "Units sold in June, all markets",
+   "Total items sold overseas in October?",
+   "how many unites did we sell in nov",
+   "Number of gift items sold per month, please"
+  ],
+  "zh": [
+   "2025年3月卖出了多少件商品？",
+   "英国市场第三季度的销售件数是多少？",
+   "8月售出的数量是多少？",
+   "今年到现在总共卖了多少件？",
+   "海外市场10月的产品件数是多少？",
+   "每个月卖出多少件货，列一下",
+   "一共卖了多少个礼品？",
+   "6月的销售件数是多少？"
+  ]
+ },
+ "active_customers": {
+  "en": [
+   "How many customers bought from us in March 2025?",
+   "Active accounts in September?",
+   "How many unique shops ordered from the UK in Q2?",
+   "Number of distinct buyers in October",
+   "How many customers placed at least one order in August?",
+   "Active customer count for overseas, June",
+   "how many active custmers did we have in may",
+   "Unique buyers per month, please"
+  ],
+  "zh": [
+   "2025年3月有多少个客户下过单？",
+   "9月的活跃客户数是多少？",
+   "英国市场第二季度有几家店铺在买我们的货？",
+   "10月去重后的买家数量是多少？",
+   "8月有过采购的客户有多少？",
+   "海外市场6月的活跃客户数是多少？",
+   "每个月有多少个不同的客户在买？",
+   "11月有交易的客户数是多少？"
+  ]
+ },
+ "new_customers": {
+  "en": [
+   "How many new customers did we win in March 2025?",
+   "New buyers who first ordered in September?",
+   "First-time customers in the UK market in Q2",
+   "How many brand new accounts placed their first order in August?",
+   "New shops acquired in October",
+   "Count of first-time buyers for overseas in June",
+   "how many new custmers in may",
+   "New client count per month, please"
+  ],
+  "zh": [
+   "2025年3月新增了多少客户？",
+   "9月首次下单的新客户数是多少？",
+   "英国市场第二季度的新客户有几个？",
+   "8月第一次来买东西的客户有多少？",
+   "10月拓展的新店铺数量是多少？",
+   "海外市场6月首单客户数是多少？",
+   "每个月的新客户数，列出来",
+   "今年新获取的客户一共多少个？"
+  ]
+ },
+ "repeat_customers": {
+  "en": [
+   "How many repeat customers did we have in March 2025?",
+   "Returning buyers in September?",
+   "How many customers came back to order again in the UK in Q2?",
+   "Number of repeat accounts in October",
+   "Customers who ordered in an earlier month and bought again in August?",
+   "Repeat buyer count for overseas, June",
+   "how many returning custmers in may",
+   "Count of repeat shops per month, please"
+  ],
+  "zh": [
+   "2025年3月的复购客户有多少？",
+   "9月的回头客数量是多少？",
+   "英国市场第二季度有多少老客户又来下单？",
+   "10月复购的店铺有几家？",
+   "8月有多少客户是之前买过、这个月又买的？",
+   "海外市场6月的回头客数量是多少？",
+   "每个月的复购客户数是多少？",
+   "11月老客户回购了多少家？"
+  ]
+ }
+}

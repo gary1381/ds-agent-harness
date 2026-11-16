@@ -1,0 +1,284 @@
+[
+ {
+  "qid": "C-L01",
+  "form": "DIRECT",
+  "metric": "net_revenue_fen",
+  "why": "single month, already net of refunds, fen unchanged"
+ },
+ {
+  "qid": "C-L04",
+  "form": "DIRECT",
+  "metric": "arpu_fen",
+  "why": "single month ARPU in fen"
+ },
+ {
+  "qid": "C-L06",
+  "form": "DIRECT",
+  "metric": "active_subscribers_bom",
+  "why": "start-of-month count broken down by channel"
+ },
+ {
+  "qid": "C-L08",
+  "form": "DERIVED",
+  "metric": "net_revenue_fen",
+  "why": "share of total across regions"
+ },
+ {
+  "qid": "C-L11",
+  "form": "DERIVED",
+  "metric": "arpu_fen",
+  "why": "fen to CNY conversion; ARPU is revenue-based, not plan price"
+ },
+ {
+  "qid": "C-L13",
+  "form": "DERIVED",
+  "metric": "net_revenue_fen",
+  "why": "ranking across regions plus CNY conversion"
+ },
+ {
+  "qid": "C-L14",
+  "form": "DERIVED",
+  "metric": "churn_rate",
+  "why": "difference between channels, shown in percentage points"
+ },
+ {
+  "qid": "C-L15",
+  "form": "DERIVED",
+  "metric": "program_churn_rate",
+  "why": "ratio converted to percentage"
+ },
+ {
+  "qid": "C-L16",
+  "form": "DERIVED",
+  "metric": "program_churn_rate",
+  "why": "difference between arms"
+ },
+ {
+  "qid": "C-L17",
+  "form": "DERIVED",
+  "metric": null,
+  "why": "message exposure is not a governed metric; share needs arithmetic"
+ },
+ {
+  "qid": "C-H01",
+  "form": "DIRECT",
+  "metric": "churn_rate",
+  "why": "single month, all subscribers, already 0-1"
+ },
+ {
+  "qid": "C-H03",
+  "form": "DIRECT",
+  "metric": "arpu_fen",
+  "why": "single month ARPU in fen, unrounded"
+ },
+ {
+  "qid": "C-H04",
+  "form": "DIRECT",
+  "metric": "churn_rate",
+  "why": "single month broken down by region, already 0-1"
+ },
+ {
+  "qid": "C-H05",
+  "form": "DIRECT",
+  "metric": "active_subscribers_eom",
+  "why": "end-of-month count broken down by plan"
+ },
+ {
+  "qid": "C-H06",
+  "form": "DIRECT",
+  "metric": "active_subscribers_bom",
+  "why": "start-of-month count broken down by channel"
+ },
+ {
+  "qid": "C-H08",
+  "form": "DERIVED",
+  "metric": "net_revenue_fen",
+  "why": "sum over 12 months plus CNY conversion"
+ },
+ {
+  "qid": "C-H09",
+  "form": "DERIVED",
+  "metric": null,
+  "why": "no watch-minutes metric; per-subscriber mean needs arithmetic"
+ },
+ {
+  "qid": "C-H10",
+  "form": "DERIVED",
+  "metric": "net_revenue_fen",
+  "why": "three-month sums, max across regions, CNY conversion"
+ },
+ {
+  "qid": "C-H11",
+  "form": "DERIVED",
+  "metric": null,
+  "why": "no ticket-count metric; ratio needs arithmetic"
+ },
+ {
+  "qid": "C-H12",
+  "form": "DERIVED",
+  "metric": "churn_rate",
+  "why": "difference between plans, in percentage points"
+ },
+ {
+  "qid": "C-H13",
+  "form": "DERIVED",
+  "metric": "arpu_fen",
+  "why": "fen to CNY conversion; ARPU approximates plan price"
+ },
+ {
+  "qid": "C-H14",
+  "form": "DERIVED",
+  "metric": "churned_customers",
+  "why": "total summed over 12 months"
+ },
+ {
+  "qid": "C-H15",
+  "form": "DERIVED",
+  "metric": "net_revenue_fen",
+  "why": "share of total across regions"
+ },
+ {
+  "qid": "C-H18",
+  "form": "DIRECT",
+  "metric": "program_enrolled",
+  "why": "single month count broken down by arm"
+ },
+ {
+  "qid": "C-H19",
+  "form": "DERIVED",
+  "metric": null,
+  "why": "message exposure is not a governed metric; share needs arithmetic"
+ },
+ {
+  "qid": "C-H20",
+  "form": "DERIVED",
+  "metric": "churn_rate",
+  "why": "maximum across months"
+ },
+ {
+  "qid": "C-L23",
+  "form": "DIRECT",
+  "metric": "churned_customers",
+  "why": "single month count"
+ },
+ {
+  "qid": "C-L24",
+  "form": "DIRECT",
+  "metric": "churn_rate",
+  "why": "single month, already 0-1"
+ },
+ {
+  "qid": "C-L26",
+  "form": "DIRECT",
+  "metric": "active_subscribers_eom",
+  "why": "end-of-month count broken down by plan"
+ },
+ {
+  "qid": "C-L27",
+  "form": "DERIVED",
+  "metric": "net_revenue_fen",
+  "why": "month-over-month growth"
+ },
+ {
+  "qid": "C-L28",
+  "form": "DERIVED",
+  "metric": "net_revenue_fen",
+  "why": "share of total across regions"
+ },
+ {
+  "qid": "C-L31",
+  "form": "DERIVED",
+  "metric": null,
+  "why": "no signup metric; channel share needs arithmetic"
+ },
+ {
+  "qid": "C-L34",
+  "form": "DERIVED",
+  "metric": "churn_rate",
+  "why": "difference between channels, in percentage points"
+ },
+ {
+  "qid": "C-L37",
+  "form": "DERIVED",
+  "metric": "program_churn_rate",
+  "why": "pooled across three months, then ratio per arm"
+ },
+ {
+  "qid": "C-H21",
+  "form": "DERIVED",
+  "metric": "net_revenue_fen",
+  "why": "fen to CNY conversion"
+ },
+ {
+  "qid": "C-H22",
+  "form": "DIRECT",
+  "metric": "churn_rate",
+  "why": "single month broken down by region, already 0-1"
+ },
+ {
+  "qid": "C-H23",
+  "form": "DIRECT",
+  "metric": "active_subscribers_eom",
+  "why": "end-of-month count broken down by plan"
+ },
+ {
+  "qid": "C-H25",
+  "form": "DERIVED",
+  "metric": "net_revenue_fen",
+  "why": "sum over three months"
+ },
+ {
+  "qid": "C-H28",
+  "form": "DERIVED",
+  "metric": "net_revenue_fen",
+  "why": "annual sum per region, ranking, CNY conversion"
+ },
+ {
+  "qid": "C-H30",
+  "form": "DERIVED",
+  "metric": "net_revenue_fen",
+  "why": "share of total over five months"
+ },
+ {
+  "qid": "C-H31",
+  "form": "DERIVED",
+  "metric": "churn_rate",
+  "why": "difference between two years"
+ },
+ {
+  "qid": "C-H32",
+  "form": "DERIVED",
+  "metric": "net_revenue_fen",
+  "why": "running total across months, CNY conversion"
+ },
+ {
+  "qid": "C-H33",
+  "form": "DERIVED",
+  "metric": null,
+  "why": "no ticket-count metric; per-subscriber averages need arithmetic"
+ },
+ {
+  "qid": "C-H34",
+  "form": "DERIVED",
+  "metric": null,
+  "why": "no watch-minutes metric; per-subscriber averages need arithmetic"
+ },
+ {
+  "qid": "C-H38",
+  "form": "DIRECT",
+  "metric": "churned_customers",
+  "why": "single month count broken down by plan"
+ },
+ {
+  "qid": "C-H39",
+  "form": "DERIVED",
+  "metric": "net_revenue_fen",
+  "why": "sum over two months by region"
+ },
+ {
+  "qid": "C-H40",
+  "form": "DERIVED",
+  "metric": null,
+  "why": "no watch-minutes metric; total by plan not governed"
+ }
+]

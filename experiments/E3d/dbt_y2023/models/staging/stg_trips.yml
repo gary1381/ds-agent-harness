@@ -1,0 +1,18 @@
+version: 2
+
+models:
+  - name: stg_trips
+    description: One row per trip of the month, columns renamed; nothing dropped or changed.
+    config:
+      materialized: view
+    columns:
+      - name: vendor_id
+        description: Technology vendor that reported the trip (1 Creative Mobile, 2 VeriFone, 6).
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              arguments:
+                value_set: [1, 2, 6]
+      - name: pickup_at
+        data_tests:
+          - not_null

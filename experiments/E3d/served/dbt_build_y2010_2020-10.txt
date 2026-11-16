@@ -1,0 +1,4 @@
+$ python pipeline/ci/build.py 2020-10
+raw export check: FAIL
+  column airport_fee is INTEGER, contract says DOUBLE
+2020-10: FAILED

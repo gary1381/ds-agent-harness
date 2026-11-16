@@ -1,0 +1,46 @@
+version: 1
+name: online_retail_ii
+description: UCI Online Retail II (UK online gift retailer, 2009-12..2011-12). Money in GBP.
+time_spine:
+  grain: month
+  coverage: SELECT min(month) AS first_month, max(month) AS last_month FROM silver.transactions
+dimensions:
+  month: {type: time, description: Calendar month 'YYYY-MM'.}
+  market: {type: categorical, values: [UK, non-UK], description: UK vs rest of world.}
+datasets:
+  transactions:
+    description: Governed transaction lines.
+    relation: SELECT * FROM silver.transactions
+    month_join: b.month = s.month
+    required_filter: b.invoice IS NOT NULL   # validator demands one; this dataset has no test accounts
+    dimensions: {market: market}
+    measures:
+      amount: {agg: sum, expr: b.amount}
+      customers: {agg: count_distinct, expr: b.customer_id}
+metrics:
+  net_product_sales:
+    type: simple
+    terms: ['\bsales\b|\brevenues?\b|\bturnover\b']
+    label: Net product sales (GBP)
+    unit: GBP
+    owner: "retail-finance (example)"
+    description: Product lines minus product cancellations; excludes fees, adjustments, vouchers, zero-price lines.
+    definition: SUM(quantity*price) over line_type IN (product, cancellation), exact duplicates collapsed.
+    dataset: transactions
+    measure: amount
+    filter: b.line_type IN ('product', 'cancellation')
+    dimensions: [market]
+    caveats: [Exact-duplicate collapse is an owner decision the data cannot prove., No independent ledger exists for this dataset, so answers cap at T1.]
+  active_customers:
+    type: simple
+    terms: ['\b(?:active|identified) customers?\b|\bbuyers?\b']
+    label: Active identified customers
+    unit: customers
+    owner: "retail-crm (example)"
+    description: Distinct identified customers with at least one product line in the month.
+    definition: COUNT(DISTINCT customer_id) over product lines with customer_id not null.
+    dataset: transactions
+    measure: customers
+    filter: b.line_type = 'product' AND b.customer_id IS NOT NULL
+    dimensions: [market]
+    caveats: [About 23% of lines have no customer id (guest checkout); they are not customers here.]

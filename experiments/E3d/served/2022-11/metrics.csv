@@ -1,0 +1,2 @@
+month,trips,fare_amount,extra,mta_tax,tip_amount,tolls_amount,improvement_surcharge,congestion_surcharge,airport_fee,total_amount
+2022-11,3252620,49307790.52,2712735.91,1583487.05,9256525.66,1873185.92,960419.8,7146030.75,330385.0,71785093.06

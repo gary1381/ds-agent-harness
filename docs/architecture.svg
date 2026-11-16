@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 860" width="1240" height="860" font-family="'Noto Sans CJK SC','Noto Sans SC','PingFang SC','Microsoft YaHei','Segoe UI',Arial,sans-serif">
+<title>DS Harness 架构 / Architecture</title>
+<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#6b7280"/></marker><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#7c3aed"/></marker></defs>
+<rect width="1240" height="860" fill="#ffffff"/>
+<text x="30" y="34" font-size="22" font-weight="700" fill="#1f2937" text-anchor="start">DS Harness 架构 · Architecture</text>
+<text x="30" y="56" font-size="12.5" font-weight="400" fill="#4b5563" text-anchor="start">让 AI agent 的数据工作可验证：证据、门禁、独立评测  /  Making AI-agent data work verifiable: evidence, gates, independent evaluation</text>
+<rect x="30" y="76" width="830" height="50" rx="8" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1.2"/>
+<text x="40" y="94" font-size="13" font-weight="700" fill="#111827" text-anchor="start">请求方 · Requesters</text>
+<text x="40" y="111" font-size="11.5" font-weight="400" fill="#374151" text-anchor="start">业务分析师、数据科学家、管道负责人 / analysts, data scientists, pipeline owners</text>
+<line x1="445" y1="126" x2="445" y2="146" stroke="#6b7280" stroke-width="1.6" marker-end="url(#ah)"/>
+<rect x="30" y="146" width="830" height="108" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="1.2"/>
+<text x="40" y="164" font-size="13" font-weight="700" fill="#1e3a8a" text-anchor="start">被测 agent · Agents under test (可替换 / replaceable)</text>
+<rect x="46" y="174" width="392" height="56" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.2"/>
+<text x="56" y="192" font-size="12.5" font-weight="700" fill="#111827" text-anchor="start">Claude Code (Anthropic)</text>
+<text x="56" y="209" font-size="11" font-weight="400" fill="#374151" text-anchor="start">Haiku 5.5 · API key（11-09 起）/ from 11-09</text>
+<text x="56" y="226" font-size="11" font-weight="400" fill="#374151" text-anchor="start">Sonnet · Claude Code CLI（E1–E3d）</text>
+<rect x="452" y="174" width="392" height="56" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.2"/>
+<text x="462" y="192" font-size="12.5" font-weight="700" fill="#111827" text-anchor="start">Codex (OpenAI)</text>
+<text x="462" y="209" font-size="11" font-weight="400" fill="#374151" text-anchor="start">GPT-6 Luna，推理 high / reasoning high</text>
+<text x="462" y="226" font-size="11" font-weight="400" fill="#374151" text-anchor="start">Codex CLI</text>
+<text x="40" y="246" font-size="11" font-weight="400" fill="#1e3a8a" text-anchor="start">bwrap 沙箱 sandbox：每次尝试全新 home，看不到宿主文件 / fresh home per attempt, no host files</text>
+<line x1="445" y1="254" x2="445" y2="274" stroke="#6b7280" stroke-width="1.6" marker-end="url(#ah)"/>
+<rect x="30" y="274" width="830" height="76" rx="8" fill="#ecfeff" stroke="#0891b2" stroke-width="1.2"/>
+<text x="40" y="292" font-size="13" font-weight="700" fill="#155e75" text-anchor="start">dsh-mcp 工具面 · Tool surface（MCP，每个角色 ≤10 个工具 / ≤10 tools per role）</text>
+<rect x="44" y="300" width="152" height="40" rx="6" fill="#cffafe" stroke="#06b6d4" stroke-width="1.2"/>
+<text x="52" y="317" font-size="12" font-weight="700" fill="#164e63" text-anchor="start">dsh-analyst</text>
+<text x="52" y="332" font-size="11" font-weight="400" fill="#155e75" text-anchor="start">问数 / Q&amp;A</text>
+<rect x="207" y="300" width="152" height="40" rx="6" fill="#cffafe" stroke="#06b6d4" stroke-width="1.2"/>
+<text x="215" y="317" font-size="12" font-weight="700" fill="#164e63" text-anchor="start">dsh-ds</text>
+<text x="215" y="332" font-size="11" font-weight="400" fill="#155e75" text-anchor="start">建模 / modelling</text>
+<rect x="370" y="300" width="152" height="40" rx="6" fill="#cffafe" stroke="#06b6d4" stroke-width="1.2"/>
+<text x="378" y="317" font-size="12" font-weight="700" fill="#164e63" text-anchor="start">dsh-de</text>
+<text x="378" y="332" font-size="11" font-weight="400" fill="#155e75" text-anchor="start">管道 / pipelines</text>
+<rect x="533" y="300" width="152" height="40" rx="6" fill="#cffafe" stroke="#06b6d4" stroke-width="1.2"/>
+<text x="541" y="317" font-size="12" font-weight="700" fill="#164e63" text-anchor="start">dsh-model</text>
+<text x="541" y="332" font-size="11" font-weight="400" fill="#155e75" text-anchor="start">预测门禁 / forecast</text>
+<rect x="696" y="300" width="152" height="40" rx="6" fill="#cffafe" stroke="#06b6d4" stroke-width="1.2"/>
+<text x="704" y="317" font-size="12" font-weight="700" fill="#164e63" text-anchor="start">dsh-experiment</text>
+<text x="704" y="332" font-size="11" font-weight="400" fill="#155e75" text-anchor="start">读数门禁 / read-out</text>
+<line x1="445" y1="350" x2="445" y2="370" stroke="#6b7280" stroke-width="1.6" marker-end="url(#ah)"/>
+<rect x="30" y="370" width="830" height="196" rx="8" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.2"/>
+<text x="40" y="388" font-size="13" font-weight="700" fill="#14532d" text-anchor="start">DS Harness 薄层 · Thin governance layer（自建，资产即代码 / self-built, assets as code）</text>
+<rect x="44" y="398" width="191" height="110" rx="8" fill="#dcfce7" stroke="#22c55e" stroke-width="1.2"/>
+<text x="54" y="416" font-size="12.5" font-weight="700" fill="#111827" text-anchor="start">context 上下文</text>
+<text x="54" y="433" font-size="11" font-weight="400" fill="#374151" text-anchor="start">语义层 semantic layer</text>
+<text x="54" y="450" font-size="11" font-weight="400" fill="#374151" text-anchor="start">目录 catalog（PII、时间标签）</text>
+<text x="54" y="467" font-size="11" font-weight="400" fill="#374151" text-anchor="start">verified queries 已验证查询</text>
+<rect x="247" y="398" width="191" height="110" rx="8" fill="#dcfce7" stroke="#22c55e" stroke-width="1.2"/>
+<text x="257" y="416" font-size="12.5" font-weight="700" fill="#111827" text-anchor="start">verify 验证</text>
+<text x="257" y="433" font-size="11" font-weight="400" fill="#374151" text-anchor="start">SQL 静态检查 static SQL</text>
+<text x="257" y="450" font-size="11" font-weight="400" fill="#374151" text-anchor="start">对账 reconcile</text>
+<text x="257" y="467" font-size="11" font-weight="400" fill="#374151" text-anchor="start">时间穿越 leakage</text>
+<text x="257" y="484" font-size="11" font-weight="400" fill="#374151" text-anchor="start">统计 bootstrap / SRM</text>
+<rect x="450" y="398" width="191" height="110" rx="8" fill="#dcfce7" stroke="#22c55e" stroke-width="1.2"/>
+<text x="460" y="416" font-size="12.5" font-weight="700" fill="#111827" text-anchor="start">gates 门禁</text>
+<text x="460" y="433" font-size="11" font-weight="400" fill="#374151" text-anchor="start">ALLOW · HOLD · REJECT</text>
+<text x="460" y="450" font-size="11" font-weight="400" fill="#374151" text-anchor="start">证据记录 evidence</text>
+<text x="460" y="467" font-size="11" font-weight="400" fill="#374151" text-anchor="start">审批（禁止自审）approvals</text>
+<text x="460" y="484" font-size="11" font-weight="400" fill="#374151" text-anchor="start">回测 backtest</text>
+<rect x="653" y="398" width="191" height="110" rx="8" fill="#dcfce7" stroke="#22c55e" stroke-width="1.2"/>
+<text x="663" y="416" font-size="12.5" font-weight="700" fill="#111827" text-anchor="start">readout 读数</text>
+<text x="663" y="433" font-size="11" font-weight="400" fill="#374151" text-anchor="start">问数 answer certificate</text>
+<text x="663" y="450" font-size="11" font-weight="400" fill="#374151" text-anchor="start">实验读数 experiment read-out</text>
+<text x="663" y="467" font-size="11" font-weight="400" fill="#374151" text-anchor="start">预测 forecast gate</text>
+<text x="663" y="484" font-size="11" font-weight="400" fill="#374151" text-anchor="start">管道 CI（dbt + GE）</text>
+<rect x="44" y="518" width="802" height="36" rx="6" fill="#bbf7d0" stroke="#16a34a" stroke-width="1.2"/>
+<text x="54" y="533" font-size="12" font-weight="700" fill="#14532d" text-anchor="start">registry 登记簿 · 只追加 append-only</text>
+<text x="54" y="548" font-size="11" font-weight="400" fill="#166534" text-anchor="start">证据、审批、门禁决定、审计日志；改正 = 新记录 / evidence, approvals, gate decisions, audit log; a correction is a new record</text>
+<line x1="445" y1="566" x2="445" y2="586" stroke="#6b7280" stroke-width="1.6" marker-end="url(#ah)"/>
+<rect x="30" y="586" width="830" height="104" rx="8" fill="#fffbeb" stroke="#d97706" stroke-width="1.2"/>
+<text x="40" y="604" font-size="13" font-weight="700" fill="#78350f" text-anchor="start">数据平台 · Data platform（复用 / reused）</text>
+<rect x="44" y="612" width="186" height="38" rx="6" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.2"/>
+<text x="52" y="628" font-size="12" font-weight="700" fill="#78350f" text-anchor="start">sources 源</text>
+<text x="52" y="643" font-size="10.5" font-weight="400" fill="#92400e" text-anchor="start">导出 exports</text>
+<line x1="232" y1="631" x2="250" y2="631" stroke="#d97706" stroke-width="1.4" marker-end="url(#ah)"/>
+<rect x="252" y="612" width="186" height="38" rx="6" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.2"/>
+<text x="260" y="628" font-size="12" font-weight="700" fill="#78350f" text-anchor="start">bronze</text>
+<text x="260" y="643" font-size="10.5" font-weight="400" fill="#92400e" text-anchor="start">含 PII，不可查 / PII, blocked</text>
+<line x1="440" y1="631" x2="458" y2="631" stroke="#d97706" stroke-width="1.4" marker-end="url(#ah)"/>
+<rect x="460" y="612" width="186" height="38" rx="6" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.2"/>
+<text x="468" y="628" font-size="12" font-weight="700" fill="#78350f" text-anchor="start">staging</text>
+<text x="468" y="643" font-size="10.5" font-weight="400" fill="#92400e" text-anchor="start">bronze_safe 无 PII / PII-free</text>
+<line x1="648" y1="631" x2="666" y2="631" stroke="#d97706" stroke-width="1.4" marker-end="url(#ah)"/>
+<rect x="668" y="612" width="186" height="38" rx="6" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.2"/>
+<text x="676" y="628" font-size="12" font-weight="700" fill="#78350f" text-anchor="start">silver</text>
+<text x="676" y="643" font-size="10.5" font-weight="400" fill="#92400e" text-anchor="start">认证表 certified</text>
+<text x="44" y="676" font-size="11" font-weight="400" fill="#78350f" text-anchor="start">dbt · Great Expectations · DuckDB ｜ 合成世界 + 公开真实数据 / synthetic world + public data（UCI Online Retail II、NYC TLC、Hillstrom）</text>
+<rect x="30" y="716" width="830" height="58" rx="8" fill="#fef2f2" stroke="#dc2626" stroke-width="1.2" stroke-dasharray="6 4"/>
+<text x="40" y="734" font-size="13" font-weight="700" fill="#7f1d1d" text-anchor="start">custody 保管区 · 仅评估方 / evaluator only</text>
+<text x="40" y="752" font-size="11" font-weight="400" fill="#991b1b" text-anchor="start">真值、封存月份、封存标签：agent 永远不可见，只有评估方代码读取</text>
+<text x="40" y="767" font-size="11" font-weight="400" fill="#991b1b" text-anchor="start">ground truth, sealed months and labels: never visible to agents; read by evaluator code after a census</text>
+<rect x="890" y="76" width="320" height="520" rx="8" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.2"/>
+<text x="900" y="94" font-size="13" font-weight="700" fill="#4c1d95" text-anchor="start">评测闭环 · Evaluation loop（E1–E5）</text>
+<rect x="902" y="104" width="296" height="72" rx="8" fill="#ede9fe" stroke="#8b5cf6" stroke-width="1.2"/>
+<text x="912" y="122" font-size="12.5" font-weight="700" fill="#111827" text-anchor="start">1  题库盲写 · Blind bank</text>
+<text x="912" y="139" font-size="11" font-weight="400" fill="#374151" text-anchor="start">Luna、Haiku 出题，设计者只审答案</text>
+<text x="912" y="156" font-size="11" font-weight="400" fill="#374151" text-anchor="start">authors never see the gate code</text>
+<line x1="1050" y1="176" x2="1050" y2="184" stroke="#7c3aed" stroke-width="1.4" marker-end="url(#ah)"/>
+<rect x="902" y="184" width="296" height="72" rx="8" fill="#ede9fe" stroke="#8b5cf6" stroke-width="1.2"/>
+<text x="912" y="202" font-size="12.5" font-weight="700" fill="#111827" text-anchor="start">2  预注册 · Pre-registration</text>
+<text x="912" y="219" font-size="11" font-weight="400" fill="#374151" text-anchor="start">规则和文件 sha256 先冻结</text>
+<text x="912" y="236" font-size="11" font-weight="400" fill="#374151" text-anchor="start">rules and file digests frozen first</text>
+<line x1="1050" y1="256" x2="1050" y2="264" stroke="#7c3aed" stroke-width="1.4" marker-end="url(#ah)"/>
+<rect x="902" y="264" width="296" height="72" rx="8" fill="#ede9fe" stroke="#8b5cf6" stroke-width="1.2"/>
+<text x="912" y="282" font-size="12.5" font-weight="700" fill="#111827" text-anchor="start">3  普查 · Census</text>
+<text x="912" y="299" font-size="11" font-weight="400" fill="#374151" text-anchor="start">问题 × 2 agent × N/H 两组 × k 次</text>
+<text x="912" y="316" font-size="11" font-weight="400" fill="#374151" text-anchor="start">questions × agents × arms N, H × k</text>
+<line x1="1050" y1="336" x2="1050" y2="344" stroke="#7c3aed" stroke-width="1.4" marker-end="url(#ah)"/>
+<rect x="902" y="344" width="296" height="72" rx="8" fill="#ede9fe" stroke="#8b5cf6" stroke-width="1.2"/>
+<text x="912" y="362" font-size="12.5" font-weight="700" fill="#111827" text-anchor="start">4  盲标 · Blind labels</text>
+<text x="912" y="379" font-size="11" font-weight="400" fill="#374151" text-anchor="start">Luna + Haiku 双标，Terra 盲裁</text>
+<text x="912" y="396" font-size="11" font-weight="400" fill="#374151" text-anchor="start">two labellers; Terra adjudicates</text>
+<line x1="1050" y1="416" x2="1050" y2="424" stroke="#7c3aed" stroke-width="1.4" marker-end="url(#ah)"/>
+<rect x="902" y="424" width="296" height="72" rx="8" fill="#ede9fe" stroke="#8b5cf6" stroke-width="1.2"/>
+<text x="912" y="442" font-size="12.5" font-weight="700" fill="#111827" text-anchor="start">5  冻结分析 · Frozen analysis</text>
+<text x="912" y="459" font-size="11" font-weight="400" fill="#374151" text-anchor="start">按题配对区间，R1/R2 判定规则</text>
+<text x="912" y="476" font-size="11" font-weight="400" fill="#374151" text-anchor="start">paired intervals, R1/R2 rules</text>
+<line x1="1050" y1="496" x2="1050" y2="504" stroke="#7c3aed" stroke-width="1.4" marker-end="url(#ah)"/>
+<rect x="902" y="504" width="296" height="72" rx="8" fill="#ede9fe" stroke="#8b5cf6" stroke-width="1.2"/>
+<text x="912" y="522" font-size="12.5" font-weight="700" fill="#111827" text-anchor="start">6  报告 · Report</text>
+<text x="912" y="539" font-size="11" font-weight="400" fill="#374151" text-anchor="start">中英文报告；状态页每 6 小时刷新</text>
+<text x="912" y="556" font-size="11" font-weight="400" fill="#374151" text-anchor="start">EN + ZH report; dashboard every 6 h</text>
+<rect x="890" y="610" width="320" height="164" rx="8" fill="#f9fafb" stroke="#6b7280" stroke-width="1.2"/>
+<text x="900" y="628" font-size="13" font-weight="700" fill="#111827" text-anchor="start">模型与花费 · Models and spend</text>
+<text x="900" y="645" font-size="11.5" font-weight="400" fill="#374151" text-anchor="start">Haiku 5.5 · Luna · Terra：API key</text>
+<text x="900" y="662" font-size="11.5" font-weight="400" fill="#374151" text-anchor="start">辅助 helpers 默认 Luna；Terra 裁决</text>
+<text x="900" y="679" font-size="11.5" font-weight="400" fill="#374151" text-anchor="start">Haiku, Luna, Terra by API key</text>
+<text x="900" y="696" font-size="11.5" font-weight="400" fill="#374151" text-anchor="start">每次 API 调用记入花费账本</text>
+<text x="900" y="713" font-size="11.5" font-weight="400" fill="#374151" text-anchor="start">spend ledger outside the repo</text>
+<text x="900" y="730" font-size="11.5" font-weight="400" fill="#374151" text-anchor="start">Codex 走 CLI / via the Codex CLI</text>
+<polyline points="902,294 875,294 875,200 860,200" fill="none" stroke="#7c3aed" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#ah2)"/>
+<text x="868" y="282" font-size="10" font-weight="400" fill="#6d28d9" text-anchor="end">跑 agent</text>
+<polyline points="902,454 875,454 875,745 860,745" fill="none" stroke="#7c3aed" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#ah2)"/>
+<text x="868" y="732" font-size="10" font-weight="400" fill="#6d28d9" text-anchor="end">读真值</text>
+<text x="30" y="812" font-size="11" font-weight="400" fill="#4b5563" text-anchor="start">实线箭头 solid arrow：请求与数据流 / request and data flow     紫色虚线 purple dashed：评测流程 / evaluation process</text>
+<text x="30" y="832" font-size="10" font-weight="400" fill="#6b7280" text-anchor="start">E1 合成世界 → E1b → E2 自用 → E3a/E4 真实零售 → E3d 管道 → E3c 实验读数 → E3b 预测 → E5 覆盖检查    E1 synthetic → E1b → E2 dogfood → E3a/E4 retail → E3d pipeline → E3c experiment → E3b forecast → E5 coverage</text>
+</svg>

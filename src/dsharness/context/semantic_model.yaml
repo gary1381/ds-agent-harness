@@ -1,0 +1,331 @@
+# Governed semantic model: the single definition of what each business metric means.
+#
+# Shape follows dbt MetricFlow / Open Semantic Interchange (OSI): datasets ("semantic models")
+# carry dimensions and measures; metrics are simple (one measure) or ratio (metric / metric).
+# Agents ask for metrics by name; dsharness.context.semantic compiles them to SQL over silver.*.
+# They never re-derive revenue or churn logic from raw tables.
+#
+# SQL fragments in this file use two fixed aliases:
+#   s  = month spine row: s.month 'YYYY-MM', s.month_start (TIMESTAMP, first day 00:00),
+#        s.month_end (TIMESTAMP, last day 00:00; the month ends at s.month_end + INTERVAL 1 DAY)
+#   b  = one row of the dataset relation
+# Fragments are reviewed code (owned by the metric owner). They are never built from agent input.
+# Agent input only selects metric/dimension names and filter values, and both are validated against this file.
+
+version: 1
+name: subscription_business
+description: >-
+  Subscription video business: customers, subscriptions, invoices (charges, add-ons, refunds) and
+  support tickets. Money is in fen (1 CNY = 100 fen). Months are calendar months in UTC.
+
+time_spine:
+  grain: month
+  # The months a build can report on: from the first to the last month of its billing ledger.
+  # A request outside this window is refused. It is never answered with zeros.
+  coverage: >-
+    SELECT min(revenue_month) AS first_month, max(revenue_month) AS last_month FROM silver.invoices
+
+dimensions:
+  month:
+    type: time
+    description: Calendar month 'YYYY-MM'. Present in every metric result (required time grain).
+  region:
+    type: categorical
+    values: [north, south, east, west]
+    aliases: {north: [北区, 北部, 北方区], south: [南区, 南部, 南方区], east: [东区, 东部, 东方区], west: [西区, 西部, 西方区]}
+    names: [销售区域, 销售大区, 地区, 区域, 大区, 区]
+    description: Customer's sales region (from silver.customers).
+  plan:
+    type: categorical
+    values: [basic, plus, pro]
+    aliases: {basic: [基础版, 基础套餐, 基本版], plus: [高级版, 增强版, 进阶版], pro: [专业版, 专业套餐]}
+    names: [套餐, 订阅计划, 计划, 方案, 档位]
+    description: >-
+      Subscription plan. For invoice and ticket metrics it is the plan of the customer's latest
+      subscription.
+  channel:
+    type: categorical
+    values: [organic, paid_search, referral, livestream]
+    aliases: {organic: [自然流量, 自然渠道, 自然], paid_search: [付费搜索], referral: [推荐渠道, 推荐], livestream: [直播]}
+    names: [获客渠道, 渠道, 来源渠道]
+    description: Acquisition channel of the customer (livestream exists from 2026-08).
+  invoice_type:
+    type: categorical
+    values: [charge, addon, refund]
+    aliases: {charge: [订阅费, 月费], addon: [加购包, 附加包], refund: [退款]}
+    names: [发票类型, 账单类型, 收入类型]
+    description: Invoice line type. Refunds are negative amounts booked in the month they are issued.
+  ticket_category:
+    type: categorical
+    values: [billing, bug, howto, cancel]
+    aliases: {billing: [账单问题, 计费], bug: [故障, 缺陷], howto: [使用咨询, 操作咨询], cancel: [取消]}
+    names: [工单类别, 工单类型, 工单分类]
+    description: Support ticket category.
+  arm:
+    type: categorical
+    values: [treatment, control]
+    aliases: {treatment: [实验组, 处理组, 干预组], control: [对照组, 控制组]}
+    names: [随机分组, 实验分组, 分组, 组别]
+    description: >-
+      Randomised arm of the 2026-03..2026-06 retention program (intent-to-treat). Exposure is
+      post-assignment compliance and is never a dimension.
+
+datasets:
+  invoices:
+    description: Governed invoice ledger (deduplicated by invoice_id, unit-corrected) with customer attributes.
+    relation: |
+      SELECT i.invoice_id, i.customer_id, i.invoice_type, i.amount_fen, i.revenue_month,
+             i.region, c.channel, p.plan, i.is_test_account
+      FROM silver.invoices i
+      LEFT JOIN silver.customers c ON c.customer_id = i.customer_id
+      LEFT JOIN (SELECT customer_id, arg_max(plan, started_at) AS plan
+                 FROM silver.subscriptions GROUP BY customer_id) p ON p.customer_id = i.customer_id
+    month_join: b.revenue_month = s.month
+    required_filter: NOT b.is_test_account
+    dimensions: {region: region, channel: channel, plan: plan, invoice_type: invoice_type}
+    measures:
+      amount_fen: {agg: sum, expr: b.amount_fen}
+      invoice_lines: {agg: count, expr: b.invoice_id}
+
+  subscriptions:
+    description: One row per subscription with customer attributes. Metrics attach rows to months by date windows.
+    relation: |
+      SELECT s.subscription_id, s.customer_id, s.plan, s.started_at, s.ended_at,
+             c.region, c.channel, c.is_test_account
+      FROM silver.subscriptions s
+      LEFT JOIN silver.customers c ON c.customer_id = s.customer_id
+    month_join: null          # every metric on this dataset defines its own window
+    required_filter: NOT b.is_test_account
+    dimensions: {region: region, channel: channel, plan: plan}
+    measures:
+      subscribers: {agg: count_distinct, expr: b.customer_id}
+
+  tickets:
+    description: Support tickets with customer attributes, attached to the month the ticket was created.
+    relation: |
+      SELECT t.ticket_id, t.customer_id, strftime(t.created_at, '%Y-%m') AS created_month,
+             t.category, t.csat, c.region, c.channel, p.plan, c.is_test_account
+      FROM silver.tickets t
+      LEFT JOIN silver.customers c ON c.customer_id = t.customer_id
+      LEFT JOIN (SELECT customer_id, arg_max(plan, started_at) AS plan
+                 FROM silver.subscriptions GROUP BY customer_id) p ON p.customer_id = t.customer_id
+    month_join: b.created_month = s.month
+    required_filter: NOT b.is_test_account
+    dimensions: {region: region, channel: channel, plan: plan, ticket_category: category}
+    measures:
+      csat: {agg: avg, expr: b.csat}
+
+  program_contacts:
+    description: >-
+      Retention-program enrolments (silver.retention_contacts) with customer attributes and whether the
+      subscription in force at the start of the campaign month ended during that month (the outcome).
+    relation: |
+      SELECT r.contact_id, r.customer_id, r.campaign_month, r.arm, c.region, c.channel, p.plan,
+             c.is_test_account,
+             COALESCE(sub.ended_at < CAST(r.campaign_month || '-01' AS TIMESTAMP) + INTERVAL 1 MONTH, FALSE)
+               AS churned_in_month
+      FROM silver.retention_contacts r
+      LEFT JOIN silver.customers c ON c.customer_id = r.customer_id
+      LEFT JOIN (SELECT customer_id, arg_max(plan, started_at) AS plan
+                 FROM silver.subscriptions GROUP BY customer_id) p ON p.customer_id = r.customer_id
+      LEFT JOIN silver.subscriptions sub
+             ON sub.customer_id = r.customer_id
+            AND sub.started_at < CAST(r.campaign_month || '-01' AS TIMESTAMP)
+            AND (sub.ended_at IS NULL OR sub.ended_at >= CAST(r.campaign_month || '-01' AS TIMESTAMP))
+    month_join: b.campaign_month = s.month
+    required_filter: NOT b.is_test_account
+    dimensions: {arm: arm, region: region, channel: channel, plan: plan}
+    measures:
+      contacts: {agg: count_distinct, expr: b.contact_id}
+
+metrics:
+  net_revenue_fen:
+    terms: ['\brevenues?\b|\brefund(?:s|ed)?\b']
+    independent_record: silver.finance_closed_revenue
+    type: simple
+    label: Net revenue (fen)
+    unit: fen
+    owner: "finance-analytics@company (Head of FP&A)"
+    description: >-
+      Net revenue booked in the month: charges + add-ons - refunds, in fen, excluding internal
+      test accounts. Reconciles to silver.finance_closed_revenue for closed months.
+    definition: SUM(silver.invoices.amount_fen) by revenue_month (month the invoice was issued), NOT is_test_account.
+    dataset: invoices
+    measure: amount_fen
+    dimensions: [region, channel, plan, invoice_type]
+    caveats:
+      - Refunds are negative rows booked in the month the refund was issued, not netted against the original charge month.
+      - Duplicate export resends are removed by invoice_id only. Identical-looking add-ons with different ids are real purchases.
+      - South-region charges of 2026-03 were exported in yuan and are corrected x100 in silver under the registered incident INC-2026-03-SOUTH (unit_corrected = true). No other row is ever corrected.
+      - The latest month of a build can still change, because refunds issued on its last day may arrive after the cutoff.
+
+  addon_units:
+    terms: ['\badd[- ]?ons?\b']
+    type: simple
+    label: Add-on units sold
+    unit: count
+    owner: "product-analytics@company (Add-ons PM)"
+    description: Number of add-on packs sold in the month (one invoice line = one pack), excluding test accounts.
+    definition: COUNT(*) of silver.invoices with invoice_type = 'addon', by revenue_month, NOT is_test_account.
+    dataset: invoices
+    measure: invoice_lines
+    filter: b.invoice_type = 'addon'
+    dimensions: [region, channel, plan]
+    caveats:
+      - A customer can buy two identical packs on the same day, so same customer/day/amount lines are separate units and are not duplicates.
+      - Add-on refunds would not be netted. None exist in the current data.
+
+  active_subscribers_eom:
+    terms: ['\bactive (?:subscribers?|customers?|subscriptions?|users?)\b']
+    type: simple
+    label: Active subscribers (end of month)
+    unit: customers
+    owner: "growth-analytics@company (Head of Growth)"
+    description: Distinct non-test customers whose subscription is active at the end of the month.
+    definition: started_at < month_end + 1 day AND (ended_at IS NULL OR ended_at >= month_end + 1 day), NOT is_test_account.
+    dataset: subscriptions
+    measure: subscribers
+    month_join: >-
+      b.started_at < s.month_end + INTERVAL 1 DAY
+      AND (b.ended_at IS NULL OR b.ended_at >= s.month_end + INTERVAL 1 DAY)
+    dimensions: [region, channel, plan]
+    caveats:
+      - ended_at is current state as known at build time. A cancellation becomes known up to 3 days after it happens, so the latest month of a build can be overstated.
+
+  active_subscribers_bom:
+    terms: ['\bactive (?:subscribers?|customers?|subscriptions?|users?)\b']
+    type: simple
+    label: Active subscribers (start of month)
+    unit: customers
+    owner: "growth-analytics@company (Head of Growth)"
+    description: Distinct non-test customers whose subscription is active at the start of the month (the churn-rate denominator).
+    definition: started_at < month_start AND (ended_at IS NULL OR ended_at >= month_start), NOT is_test_account.
+    dataset: subscriptions
+    measure: subscribers
+    month_join: >-
+      b.started_at < s.month_start
+      AND (b.ended_at IS NULL OR b.ended_at >= s.month_start)
+    dimensions: [region, channel, plan]
+    caveats:
+      - Customers who sign up during the month are not counted until the next month.
+
+  churned_customers:
+    terms: ['\bchurn(?:ed|s|ing)?\b']
+    type: simple
+    label: Churned customers
+    unit: customers
+    owner: "growth-analytics@company (Head of Growth)"
+    description: Distinct non-test customers who were active at the start of the month and whose subscription ended during it.
+    definition: active at start of month AND month_start <= ended_at < month_end + 1 day, NOT is_test_account.
+    dataset: subscriptions
+    measure: subscribers
+    month_join: >-
+      b.started_at < s.month_start
+      AND b.ended_at >= s.month_start
+      AND b.ended_at < s.month_end + INTERVAL 1 DAY
+    dimensions: [region, channel, plan]
+    caveats:
+      - A cancellation becomes known up to 3 days after it happens, so the latest month of a build is understated.
+      - Same-month sign-up-and-cancel is not churn of the starting base.
+
+  churn_rate:
+    terms: ['\bchurn(?:ed)?[- ]rates?\b|\brate of churn\b|\bchurn\b[^.?!;]*\brates?\b']
+    suppresses: [churned_customers]
+    type: ratio
+    label: Monthly churn rate
+    unit: ratio
+    owner: "growth-analytics@company (Head of Growth)"
+    description: churned_customers / active_subscribers_bom for the month (0-1, not a percentage).
+    definition: churned_customers / active_subscribers_bom. Rows with zero starting base are omitted.
+    numerator: churned_customers
+    denominator: active_subscribers_bom
+    dimensions: [region, channel, plan]
+    caveats:
+      - The latest month of a build is understated (late-known cancellations).
+      - Do not average monthly rates across segments. Recompute from the counts.
+
+  arpu_fen:
+    terms: ['\barpu\b|\baverage revenue per (?:user|subscriber|customer|account)\b']
+    suppresses: [net_revenue_fen]
+    type: ratio
+    label: ARPU (fen per starting subscriber)
+    unit: fen
+    owner: "finance-analytics@company (Head of FP&A)"
+    description: Net revenue of the month divided by active subscribers at the start of the month.
+    definition: net_revenue_fen / active_subscribers_bom. Rows with zero starting base are omitted.
+    numerator: net_revenue_fen
+    denominator: active_subscribers_bom
+    dimensions: [region, channel, plan]
+    caveats:
+      - The numerator includes revenue from customers who joined during the month. The denominator does not count them.
+      - Refunds lower ARPU in the month they are issued.
+
+  avg_csat:
+    terms: ['\bcsat\b|\bcustomer satisfaction\b|\bsatisfaction scores?\b']
+    type: simple
+    label: Average CSAT
+    unit: score 1-5
+    owner: "support-ops@company (Head of Customer Support)"
+    description: Mean CSAT score of rated support tickets created in the month, excluding test accounts.
+    definition: AVG(silver.tickets.csat) over tickets with a CSAT response, by created month, NOT is_test_account.
+    dataset: tickets
+    measure: csat
+    dimensions: [region, channel, plan, ticket_category]
+    caveats:
+      - About 15% of tickets have no CSAT response. They are excluded and are not counted as zero.
+      - A monthly average cannot be combined into a quarterly average without response counts. Query the period directly.
+
+  program_enrolled:
+    terms: ['\benrol\w*']
+    type: simple
+    label: Retention-program enrolments
+    unit: customers
+    owner: "decision-science@company (Retention Program Lead)"
+    description: Customers enrolled in the randomised retention program in the campaign month, by randomised arm.
+    definition: COUNT(DISTINCT contact_id) of silver.retention_contacts by campaign_month, NOT is_test_account.
+    dataset: program_contacts
+    measure: contacts
+    dimensions: [arm, region, channel, plan]
+    caveats:
+      - The program ran 2026-03..2026-06 (about 20% of at-risk customers per month, 50/50 arms); other months are zero.
+      - Groups are the randomised arm (intent-to-treat). exposed (about 85% of treatment) is post-assignment and never defines groups.
+
+  program_churned:
+    terms: ['(?=[\s\S]*\b(?:program(?:me)?s?|campaigns?|enrol\w*|treatment|control (?:arm|group)|arms?)\b)[\s\S]*\bchurn(?:ed|s|ing)?\b']
+    suppresses: [churned_customers, program_enrolled]
+    type: simple
+    label: Retention-program churned enrolments
+    unit: customers
+    owner: "decision-science@company (Retention Program Lead)"
+    description: >-
+      Enrolled customers whose subscription ended during the campaign month, by randomised arm
+      (intent-to-treat: counted whether or not the message was seen).
+    definition: >-
+      Enrolments whose subscription in force at the start of campaign_month ended before the next month
+      started, by campaign_month, NOT is_test_account.
+    dataset: program_contacts
+    measure: contacts
+    filter: b.churned_in_month
+    dimensions: [arm, region, channel, plan]
+    caveats:
+      - A cancellation becomes known up to 3 days after it happens, so the latest campaign month of a build is understated.
+      - Counts by randomised arm, never by exposure.
+
+  program_churn_rate:
+    terms: ['(?=[\s\S]*\b(?:program(?:me)?s?|campaigns?|enrol\w*|treatment|control (?:arm|group)|arms?)\b)[\s\S]*(?:\bchurn(?:ed)?[- ]rates?\b|\brate of churn\b|\bchurn\b[^.?!;]*\brates?\b)']
+    suppresses: [churn_rate, churned_customers, program_churned, program_enrolled]
+    type: ratio
+    label: Retention-program churn rate (ITT)
+    unit: ratio
+    owner: "decision-science@company (Retention Program Lead)"
+    description: >-
+      Share of enrolled customers who churned in the campaign month, by randomised arm (0-1). The
+      intent-to-treat effect of the program is the control rate minus the treatment rate.
+    definition: program_churned / program_enrolled. Rows with no enrolments are omitted.
+    numerator: program_churned
+    denominator: program_enrolled
+    dimensions: [arm, region, channel, plan]
+    caveats:
+      - A rate difference is not an effect claim: test treatment vs control on the counts (two-proportion test, CI) before claiming an effect.
+      - Do not average monthly rates across campaign months or segments. Recompute from the counts.
+      - The latest campaign month of a build is understated (late-known cancellations).

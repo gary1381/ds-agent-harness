@@ -1,0 +1,2 @@
+month,trips,fare_amount,extra,mta_tax,tip_amount,tolls_amount,improvement_surcharge,congestion_surcharge,airport_fee,cbd_congestion_fee,total_amount
+2025-01,3475204,59362716.98,4579406.81,1661491.25,10285923.4,1561447.2,3318104.9,6531197.5,363685.0,1679955.75,89004415.5

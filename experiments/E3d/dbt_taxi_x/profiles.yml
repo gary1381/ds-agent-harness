@@ -1,0 +1,9 @@
+taxi:
+  target: ci
+  outputs:
+    ci:
+      type: duckdb
+      path: "{{ env_var('TAXI_DB', 'target/taxi.duckdb') }}"
+      threads: 1
+      settings:
+        threads: 2
